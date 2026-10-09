@@ -130,7 +130,11 @@ Code layout (planned):
 2. ✅ Combat + Phase 1 boss with hitstop / shake / sparks
    (sword combo with aim assist, plunge, orb reflect, perfect dodge slow-mo, break state,
    weak points, lock-on camera, HP / boss bar / damage numbers, result screen with rank)
-3. Effects pass: post-processing, trails, beams, shockwaves
+3. ✅ Effects pass: post-processing, trails, beams, shockwaves
+   (screen-space shockwave distortion, radial blur + speed lines, god rays from the core,
+   per-state colour grading, sword ribbon trail, noise-shaded laser with scorch trails,
+   debris/crystal shards, charge-up particles, letterboxed intro and phase-clear cinematics,
+   REDUCED setting for shake / flashes / distortion)
 4. Phases 2–3, transitions, finisher, HUD, title/result screens
 5. Audio, balance, quality settings, polish
 

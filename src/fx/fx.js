@@ -7,6 +7,9 @@ export class FX {
     this.rings = new RingPool(scene, 24);
     this.sparks = new SparkPool(scene, 900);
     this.slashes = new SlashPool(scene, 8);
+    this.rocks = new ShardPool(scene, 140, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }));
+    this.crystals = new ShardPool(scene, 140, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.scorches = new ScorchPool(scene, 90);
     this.ghosts = null; // created once the player model exists
   }
 
@@ -18,9 +21,16 @@ export class FX {
   burst(pos, opts) { this.sparks.burst(pos, opts); }
   afterimage(opts) { this.ghosts?.spawn(opts); }
   slash(pos, forward, opts) { this.slashes.spawn(pos, forward, opts); }
+  converge(pos, opts) { this.sparks.converge(pos, opts); }
+  // Flying debris. glow: additive crystal shards (use colours > 1 to bloom); otherwise rock chunks.
+  shards(pos, opts = {}) { (opts.glow ? this.crystals : this.rocks).burst(pos, opts); }
+  scorch(pos, opts) { this.scorches.spawn(pos, opts); }
 
   update(dt) {
     this.slashes.update(dt);
+    this.rocks.update(dt);
+    this.crystals.update(dt);
+    this.scorches.update(dt);
     this.rings.update(dt);
     this.sparks.update(dt);
     this.ghosts?.update(dt);
@@ -148,6 +158,30 @@ class SparkPool {
       this.baseSize[i] = size * (0.6 + Math.random() * 0.8);
       this.drag[i] = drag;
       this.grav[i] = gravity;
+    }
+  }
+
+  // Particles that start on a sphere and stream into its centre (charge-up effect).
+  converge(center, { count = 20, radius = 6, color = 0xffa040, life = 0.5, size = 0.4 } = {}) {
+    this.color.set(color);
+    for (let k = 0; k < count; k++) {
+      const i = this.next;
+      this.next = (this.next + 1) % this.n;
+      let x = Math.random() * 2 - 1;
+      let y = Math.random() * 2 - 1;
+      let z = Math.random() * 2 - 1;
+      const len = Math.hypot(x, y, z) || 1;
+      x /= len; y /= len; z /= len;
+      const r = radius * (0.7 + Math.random() * 0.3);
+      const l = life * (0.7 + Math.random() * 0.3);
+      this.pos.set([center.x + x * r, center.y + y * r, center.z + z * r], i * 3);
+      this.vel.set([(-x * r) / l, (-y * r) / l, (-z * r) / l], i * 3);
+      this.col.set([this.color.r, this.color.g, this.color.b], i * 3);
+      this.life[i] = l;
+      this.age[i] = 0;
+      this.baseSize[i] = size * (0.6 + Math.random() * 0.8);
+      this.drag[i] = 0;
+      this.grav[i] = 0;
     }
   }
 
@@ -332,5 +366,149 @@ class SlashPool {
       u.uFade.value = 1 - Math.max(0, (it.t - it.sweep) / (it.life - it.sweep));
       if (it.t >= it.life) it.mesh.visible = false;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tumbling debris (one instanced draw call per pool).
+const _o = new THREE.Object3D();
+const _col = new THREE.Color();
+
+class ShardPool {
+  constructor(scene, n, material) {
+    const geo = new THREE.TetrahedronGeometry(0.5, 0);
+    geo.scale(1, 1.8, 0.6);
+    this.mesh = new THREE.InstancedMesh(geo, material, n);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.frustumCulled = false;
+    this.mesh.count = n;
+    for (let i = 0; i < n; i++) {
+      _o.scale.setScalar(0);
+      _o.updateMatrix();
+      this.mesh.setMatrixAt(i, _o.matrix);
+      this.mesh.setColorAt(i, _col.set(0xffffff));
+    }
+    scene.add(this.mesh);
+    this.n = n;
+    this.items = Array.from({ length: n }, () => ({
+      pos: new THREE.Vector3(), vel: new THREE.Vector3(), rot: new THREE.Euler(), spin: new THREE.Vector3(),
+      t: 0, life: 0, size: 1, alive: false, color: new THREE.Color(),
+    }));
+    this.next = 0;
+  }
+
+  burst(origin, { count = 12, color = 0x8a7f9a, speed = 14, size = 1, life = 1.4, gravity = 30, up = 0.6 } = {}) {
+    for (let k = 0; k < count; k++) {
+      const it = this.items[this.next];
+      this.next = (this.next + 1) % this.n;
+      const a = Math.random() * Math.PI * 2;
+      const e = Math.random() * 2 - 1 + up;
+      it.pos.copy(origin);
+      it.vel.set(Math.cos(a), e, Math.sin(a)).normalize().multiplyScalar(speed * (0.4 + Math.random() * 0.6));
+      it.rot.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+      it.spin.set(Math.random() * 12 - 6, Math.random() * 12 - 6, Math.random() * 12 - 6);
+      it.t = 0;
+      it.life = life * (0.6 + Math.random() * 0.4);
+      it.size = size * (0.4 + Math.random() * 0.9);
+      it.gravity = gravity;
+      it.alive = true;
+      it.color.set(color);
+    }
+  }
+
+  update(dt) {
+    let any = false;
+    for (let i = 0; i < this.n; i++) {
+      const it = this.items[i];
+      if (!it.alive) continue;
+      any = true;
+      it.t += dt;
+      const k = it.t / it.life;
+      if (k >= 1) {
+        it.alive = false;
+        _o.scale.setScalar(0);
+      } else {
+        it.vel.y -= it.gravity * dt;
+        it.pos.addScaledVector(it.vel, dt);
+        it.rot.x += it.spin.x * dt;
+        it.rot.y += it.spin.y * dt;
+        it.rot.z += it.spin.z * dt;
+        _o.position.copy(it.pos);
+        _o.rotation.copy(it.rot);
+        _o.scale.setScalar(it.size * (k > 0.7 ? (1 - k) / 0.3 : 1));
+      }
+      _o.updateMatrix();
+      this.mesh.setMatrixAt(i, _o.matrix);
+      this.mesh.setColorAt(i, it.color);
+    }
+    if (any || this.dirty) {
+      this.mesh.instanceMatrix.needsUpdate = true;
+      if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    }
+    this.dirty = any;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Glowing scorch marks left on platforms by the laser. They cool from white-hot to dark.
+class ScorchPool {
+  constructor(scene, n) {
+    const geo = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.mesh = new THREE.InstancedMesh(geo, mat, n);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 2;
+    for (let i = 0; i < n; i++) {
+      _o.scale.setScalar(0);
+      _o.updateMatrix();
+      this.mesh.setMatrixAt(i, _o.matrix);
+      this.mesh.setColorAt(i, _col.set(0x000000));
+    }
+    scene.add(this.mesh);
+    this.n = n;
+    this.items = Array.from({ length: n }, () => ({ pos: new THREE.Vector3(), t: 0, life: 0, size: 1, alive: false }));
+    this.next = 0;
+  }
+
+  spawn(pos, { size = 0.9, life = 2.6 } = {}) {
+    const it = this.items[this.next];
+    this.next = (this.next + 1) % this.n;
+    it.pos.copy(pos);
+    it.t = 0;
+    it.life = life;
+    it.size = size * (0.8 + Math.random() * 0.4);
+    it.rot = Math.random() * Math.PI;
+    it.alive = true;
+  }
+
+  update(dt) {
+    let any = false;
+    for (let i = 0; i < this.n; i++) {
+      const it = this.items[i];
+      if (!it.alive) continue;
+      any = true;
+      it.t += dt;
+      const k = it.t / it.life;
+      if (k >= 1) {
+        it.alive = false;
+        _o.scale.setScalar(0);
+        _col.setRGB(0, 0, 0);
+      } else {
+        _o.position.copy(it.pos);
+        _o.rotation.set(0, it.rot, 0);
+        _o.scale.set(it.size, 1, it.size * 0.7);
+        // White-hot -> orange -> dim red ember.
+        const heat = (1 - k) ** 2;
+        _col.setRGB(1.6 * heat + 0.25 * (1 - k), 0.9 * heat * heat + 0.05 * (1 - k), 0.5 * heat ** 3);
+      }
+      _o.updateMatrix();
+      this.mesh.setMatrixAt(i, _o.matrix);
+      this.mesh.setColorAt(i, _col);
+    }
+    if (any || this.dirty) {
+      this.mesh.instanceMatrix.needsUpdate = true;
+      this.mesh.instanceColor.needsUpdate = true;
+    }
+    this.dirty = any;
   }
 }

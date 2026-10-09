@@ -41,7 +41,7 @@ html, body {
 
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
-#hud, #flash { pointer-events: none !important; }
+#hud, #flash, #letterbox { pointer-events: none !important; }
 [hidden] { display: none !important; }
 
 /* ---------- HUD ---------- */
@@ -445,3 +445,27 @@ body.mobile #combo { top: 22%; }
 .tbtn-small { width: 52px; height: 52px; font-size: 10px; }
 #btn-lock { right: calc(24px + var(--safe-r)); top: calc(70px + var(--safe-t)); }
 #btn-lock.on { border-color: var(--gold); color: var(--gold); box-shadow: 0 0 12px rgba(255, 192, 97, 0.5); }
+
+/* ---------- Cinematic letterbox ---------- */
+#letterbox i {
+  position: absolute; left: 0; right: 0;
+  height: 0;
+  background: #000;
+  transition: height 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 5;
+}
+#letterbox i:first-child { top: 0; }
+#letterbox i:last-of-type { bottom: 0; }
+body.cinematic #letterbox i { height: 11vh; }
+body.cinematic #hud, body.cinematic #touch, body.cinematic #btn-menu { opacity: 0; pointer-events: none; }
+#hud, #touch { transition: opacity 0.3s; }
+#skip-hint {
+  position: absolute; right: 20px; bottom: 3vh;
+  z-index: 6;
+  font: 700 11px/1 "Orbitron", sans-serif;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+body.cinematic.skippable #skip-hint { opacity: 1; }

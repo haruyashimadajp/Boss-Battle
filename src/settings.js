@@ -9,6 +9,7 @@ const DEFAULTS = {
   sensitivity: 1,
   invertY: false,
   showFps: false,
+  effects: 'full', // full | reduced (camera shake, flashes, distortion)
 };
 
 export class Settings {

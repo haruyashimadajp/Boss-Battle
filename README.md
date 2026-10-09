@@ -3,7 +3,7 @@
 A browser 3D boss-battle action game (Three.js, no build step).
 Design document: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)
 
-**Current state: Prototype 02 — Phase 1 boss fight.** Floating sky arena, full movement kit,
+**Current state: Prototype 03 — Phase 1 boss fight with the full effects pass.** Floating sky arena, full movement kit,
 sword combat, and Phase 1 of the Seraph fight (laser sweeps, homing orbs, wing slams).
 PC and mobile controls.
 
@@ -51,6 +51,7 @@ Tips:
 - Jump during a dash to keep its momentum (dash-jump). Grappling refills your dash charges
   and double jump. The dark circle under you shows where you'll land.
 - You have 6 HP. Falling into the void costs 1.
+- Settings → "Screen shake & flashes: REDUCED" tones down shake, flashes and distortion.
 
 ## Code layout
 

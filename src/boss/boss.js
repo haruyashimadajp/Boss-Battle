@@ -125,6 +125,9 @@ export class Boss {
   start() {
     this.state = 'intro';
     this.stateT = 0;
+    const c = this.getCorePos(_v);
+    this.fx.converge(c, { count: 120, radius: 30, color: 0xffc061, life: 1.0, size: 1.2 });
+    this.fx.ring(c, { color: 0xffd38a, from: 30, to: 6, life: 1.0, normal: this.ctx?.camNormal });
   }
 
   getCorePos(out) {
@@ -187,6 +190,9 @@ export class Boss {
     this.fx.burst(p, { count: 60, color: 0xff3d6e, speed: 20, life: 0.7, size: 0.6 });
     this.fx.burst(p, { count: 30, color: 0xffffff, speed: 12, life: 0.4, size: 0.5 });
     this.fx.ring(p, { color: 0xff8fb0, from: 1, to: 9, life: 0.5, normal: this.ctx?.camNormal });
+    this.fx.shards(p, { glow: true, count: 34, color: new THREE.Color(3, 0.5, 1.3), speed: 18, size: 0.8, life: 1.2, gravity: 14 });
+    this.fx.shards(p, { count: 14, color: 0x2a2440, speed: 12, size: 1.4, life: 1.8 });
+    this.ctx?.shockwave?.(p, { strength: 1.1, speed: 0.8, life: 0.6 });
     // Scorch the wing so the loss stays visible.
     wp.blade.material = this.wingMat.clone();
     wp.blade.material.emissive.set(0x220008);
@@ -195,6 +201,11 @@ export class Boss {
 
   enterBreak() {
     this.cancelHazards();
+    // The shell shatters as the boss falls.
+    const c = this.getCorePos(_v);
+    this.fx.shards(c, { glow: true, count: 60, color: new THREE.Color(3, 2.2, 1), speed: 26, size: 1.1, life: 1.4, gravity: 12, up: 0 });
+    this.fx.ring(c, { color: 0xffffff, from: 4, to: 22, life: 0.6, normal: this.ctx?.camNormal });
+    this.ctx?.shockwave?.(c, { strength: 1.6, speed: 0.7, life: 0.8 });
     this.state = 'broken';
     this.stateT = 0;
     this.shell.visible = false;
@@ -205,6 +216,10 @@ export class Boss {
   clearPhase() {
     if (this.state === 'cleared') return;
     this.cancelHazards();
+    const c = this.getCorePos(_v);
+    this.fx.shards(c, { glow: true, count: 120, color: new THREE.Color(3.2, 2, 0.8), speed: 34, size: 1.3, life: 2.2, gravity: 6, up: 0 });
+    this.fx.shards(c, { count: 50, color: 0x2a2440, speed: 22, size: 1.8, life: 2.5, gravity: 10, up: 0 });
+    this.ctx?.shockwave?.(c, { strength: 2, speed: 0.5, life: 1.2 });
     this.state = 'cleared';
     this.stateT = 0;
     this.events.onPhaseClear();

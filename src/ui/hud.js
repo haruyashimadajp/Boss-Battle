@@ -16,6 +16,7 @@ export class HUD {
     this.frames = 0;
     this.fpsTime = 0;
     this.lastHp = P.maxHp;
+    this.flashScale = 1;
 
     this.bossBar = document.getElementById('boss-bar');
     this.bossFill = this.bossBar.querySelector('.boss-hp-fill');
@@ -59,7 +60,7 @@ export class HUD {
     const f = this.flashEl;
     f.style.transition = 'none';
     f.style.background = color;
-    f.style.opacity = alpha;
+    f.style.opacity = alpha * this.flashScale;
     void f.offsetWidth; // restart the fade
     f.style.transition = '';
     f.style.opacity = 0;

@@ -21,15 +21,69 @@ const additive = (color, opacity = 1, extra = {}) => new THREE.MeshBasicMaterial
   color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, ...extra,
 });
 
+// Returns the platform collider containing p, or null.
 function pointInPlatform(p, colliders) {
   for (const c of colliders) {
     if (c.type !== 'cyl') continue;
     if (p.y < c.yMin || p.y > c.yMax) continue;
     const dx = p.x - c.x;
     const dz = p.z - c.z;
-    if (dx * dx + dz * dz < c.r * c.r) return true;
+    if (dx * dx + dz * dz < c.r * c.r) return c;
   }
-  return false;
+  return null;
+}
+
+// Energy beam: brightest where the surface faces the camera, with noise scrolling along it.
+function beamMaterial(color, intensity, power) {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uTime: { value: 0 },
+      uLen: { value: 1 },
+      uIntensity: { value: intensity },
+      uPower: { value: power },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        vUv = uv;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uTime;
+      uniform float uLen;
+      uniform float uIntensity;
+      uniform float uPower;
+      varying vec2 vUv;
+      varying vec3 vN;
+      varying vec3 vV;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float noise(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        vec2 u = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y);
+      }
+      void main() {
+        float facing = abs(dot(normalize(vN), normalize(vV)));
+        float body = pow(facing, uPower);
+        float along = vUv.y * uLen;
+        float n = noise(vec2(vUv.x * 8.0, along * 0.35 - uTime * 16.0));
+        float n2 = noise(vec2(vUv.x * 3.0 + 5.0, along * 0.12 - uTime * 6.0));
+        float a = body * (0.5 + 0.5 * n) * (0.65 + 0.35 * n2);
+        a *= smoothstep(0.0, 0.04, vUv.y);
+        gl_FragColor = vec4(uColor * uIntensity * (0.8 + n * 0.7), a);
+      }`,
+  });
 }
 
 function distToSegment(p, a, b) {
@@ -105,9 +159,12 @@ export class LaserSweep extends Hazard {
     this.aimLine = this.add(new THREE.Mesh(beamGeo, additive(0xff4060, 0.7)));
     this.charge = this.add(new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), additive(0xff6040, 0.8)));
     this.beam = this.add(new THREE.Group());
-    this.beamCore = new THREE.Mesh(beamGeo, additive(0xffffff, 1));
-    this.beamGlow = new THREE.Mesh(beamGeo, additive(0xff5a3c, 0.6));
-    this.beamOuter = new THREE.Mesh(beamGeo, additive(0xff2d55, 0.18));
+    this.beamCore = new THREE.Mesh(beamGeo, beamMaterial(0xfff2e0, 2.6, 0.4));
+    this.beamGlow = new THREE.Mesh(beamGeo, beamMaterial(0xff5a3c, 1.7, 1.6));
+    this.beamOuter = new THREE.Mesh(beamGeo, beamMaterial(0xff2d55, 0.9, 3.0));
+    this.beamParts = [this.beamCore, this.beamGlow, this.beamOuter];
+    this.lastScorch = new THREE.Vector3(1e9, 0, 0);
+    this.hitCol = null;
     this.beam.add(this.beamCore, this.beamGlow, this.beamOuter);
     for (const m of this.beam.children) m.frustumCulled = false;
     this.beam.visible = false;
@@ -140,7 +197,8 @@ export class LaserSweep extends Hazard {
     const cols = this.ctx.world.colliders;
     for (let d = 7; d < 120; d += 1.5) {
       this.end.copy(this.origin).addScaledVector(this.dir, d);
-      if (pointInPlatform(this.end, cols)) return d;
+      this.hitCol = pointInPlatform(this.end, cols);
+      if (this.hitCol) return d;
     }
     return 120;
   }
@@ -163,7 +221,7 @@ export class LaserSweep extends Hazard {
       const k = t / this.telegraph;
       this.charge.position.copy(this.origin).addScaledVector(this.dir, 6.5);
       this.charge.scale.setScalar(0.3 + k * 2.2 + Math.sin(t * 50) * 0.15);
-      if (Math.random() < 0.6) fx.burst(this.charge.position, { count: 2, color: 0xff7a4a, speed: -10, life: 0.3, size: 0.4 });
+      fx.converge(this.charge.position, { count: 3, radius: 7, color: 0xff7a4a, life: 0.35, size: 0.45 });
       return true;
     }
 
@@ -173,6 +231,8 @@ export class LaserSweep extends Hazard {
         this.beam.visible = true;
         this.aimLine.visible = false;
         this.ctx.shake(0.25);
+        this.ctx.shockwave?.(this.charge.position, { strength: 0.7, speed: 0.8, life: 0.5 });
+        fx.ring(this.charge.position, { color: 0xffd0a0, from: 1, to: 8, life: 0.35, normal: this.dir });
       }
       const k = Math.min(1, st / this.sweep);
       const e = k * k * (3 - 2 * k);
@@ -184,11 +244,22 @@ export class LaserSweep extends Hazard {
       this.beamCore.scale.set(0.35 * fade * flick, 1, 0.35 * fade * flick);
       this.beamGlow.scale.set(1.0 * fade * flick, 1, 1.0 * fade * flick);
       this.beamOuter.scale.set(2.2 * fade, 1, 2.2 * fade);
+      for (const m of this.beamParts) {
+        m.material.uniforms.uTime.value = t;
+        m.material.uniforms.uLen.value = len;
+      }
       this.charge.position.copy(this.origin).addScaledVector(this.dir, 6.5);
       this.charge.scale.setScalar(2.6 * fade * flick);
 
       if (len < 120) {
         fx.burst(this.end, { count: 4, color: 0xffa060, speed: 14, life: 0.4, size: 0.45, gravity: 20 });
+        // Burn a glowing trail across the platform tops.
+        const c = this.hitCol;
+        if (c && this.end.y > c.yMax - 1.2 && this.end.distanceTo(this.lastScorch) > 0.7) {
+          _p.set(this.end.x, c.yMax + 0.04, this.end.z);
+          fx.scorch(_p);
+          this.lastScorch.copy(this.end);
+        }
         if (Math.random() < 0.25) fx.ring(this.end, { color: 0xff6040, from: 0.5, to: 3, life: 0.3, alpha: 0.6 });
       }
       if (fade > 0.4) {
@@ -219,6 +290,8 @@ export class OrbVolley extends Hazard {
     this.spawned = 0;
     this.spawnT = 0;
     this.base = Math.random() * Math.PI * 2;
+    ctx.boss.getCorePos(_a);
+    ctx.fx.converge(_a, { count: 50, radius: 14, color: 0xff4a7a, life: 0.45, size: 0.6 });
   }
 
   spawnOrb() {
@@ -393,6 +466,8 @@ export class WingSlam extends Hazard {
       this.blade.position.set(c.x, c.y + 26 - k * 3, c.z);
       this.blade.rotation.y += dt * 2;
       this.blade.material.emissiveIntensity = 1 + k * 3;
+      _a.copy(this.blade.position).y += 4;
+      fx.converge(_a, { count: 2, radius: 6, color: 0xff7a3a, life: 0.3, size: 0.5 });
       return true;
     }
 
@@ -410,6 +485,11 @@ export class WingSlam extends Hazard {
       fx.burst(_a.copy(c).setY(c.y + 0.5), { count: 60, color: 0xffa060, speed: 22, flat: true, life: 0.6, size: 0.6, gravity: 10 });
       fx.burst(_a, { count: 24, color: 0xffffff, speed: 12, life: 0.35, size: 0.5 });
       fx.ring(_a.copy(c).setY(c.y + 0.15), { color: 0xfff0d0, from: 1, to: this.radius * 1.6, life: 0.35 });
+      fx.shards(_a, { count: 28, color: 0x6a6080, speed: 16, size: 1.2, life: 1.6 });
+      fx.shards(_a, { glow: true, count: 18, color: new THREE.Color(3, 1.2, 0.4), speed: 20, size: 0.6, life: 0.9 });
+      _p.copy(c).setY(c.y + 0.05);
+      fx.scorch(_p, { size: this.radius * 0.9, life: 3.5 });
+      this.ctx.shockwave?.(_a, { strength: 1.3, speed: 0.9, life: 0.7 });
       const d = player.pos.distanceTo(c);
       this.ctx.shake(Math.max(0.15, 0.7 - d / 60));
       this.ctx.impactFlash?.(d);

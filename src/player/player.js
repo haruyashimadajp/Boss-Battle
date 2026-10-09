@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PLAYER as P, COMBAT } from '../config.js';
 import { resolve, probeGround, groundHeightBelow } from '../world/collision.js';
 import { buildPlayerModel } from './model.js';
+import { SwordTrail } from '../fx/trail.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _wish = new THREE.Vector3();
@@ -15,6 +16,8 @@ const _camDir = new THREE.Vector3();
 
 const _hit = new THREE.Vector3();
 const _pt = new THREE.Vector3();
+const _bladeBase = new THREE.Vector3();
+const _bladeTip = new THREE.Vector3();
 
 const COLOR = { cyan: 0x46e6ff, violet: 0xb77dff, white: 0xffffff };
 
@@ -35,6 +38,7 @@ export class Player {
     this.model = buildPlayerModel();
     scene.add(this.model.root);
     fx.initAfterimages(this.model.root);
+    this.trail = new SwordTrail(scene);
 
     this.shadow = new THREE.Mesh(
       new THREE.CircleGeometry(0.55, 24),
@@ -631,6 +635,20 @@ export class Player {
         m.armR.rotation.z = (def.flip ? -1 : 1) * Math.cos(def.roll) * THREE.MathUtils.lerp(0.9, -0.9, k);
       }
     }
+
+    // Ribbon trail along the blade while it is swinging.
+    let swinging = false;
+    if (cb.active) {
+      const def = cb.active;
+      swinging = def.plunge || (cb.t >= def.hitStart - 0.05 && cb.t <= def.hitEnd + 0.04);
+    }
+    if (swinging) {
+      m.root.updateMatrixWorld();
+      m.handSword.localToWorld(_bladeBase.set(0, 0.2, 0));
+      m.handSword.localToWorld(_bladeTip.set(0, 1.4, 0));
+      this.trail.setColor(cb.active.heavy ? 0x9ff4ff : COLOR.cyan);
+    }
+    this.trail.update(dt, swinging, _bladeBase, _bladeTip);
 
     // Blink while recovering from a hit.
     m.root.visible = this.hurtT <= 0 || Math.floor(this.hurtT * 18) % 2 === 0;

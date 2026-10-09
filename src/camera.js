@@ -23,6 +23,7 @@ export class CameraRig {
     this.locked = true;
     this.lockTarget = null; // () => Vector3 | null
     this.lookIdle = 99;
+    this.shakeScale = 1;
   }
 
   snap(player) {
@@ -33,7 +34,7 @@ export class CameraRig {
   }
 
   shake(amount) {
-    this.trauma = Math.min(1, this.trauma + amount);
+    this.trauma = Math.min(1, this.trauma + amount * this.shakeScale);
   }
 
   update(dt, player, input) {
