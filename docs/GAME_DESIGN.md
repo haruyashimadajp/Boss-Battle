@@ -127,7 +127,9 @@ Code layout (planned):
 ## 7. Milestones
 
 1. ✅ Movement prototype: controller, camera, jump/dash/grapple on platforms, settings, PC/mobile controls
-2. Combat + Phase 1 boss with hitstop / shake / sparks
+2. ✅ Combat + Phase 1 boss with hitstop / shake / sparks
+   (sword combo with aim assist, plunge, orb reflect, perfect dodge slow-mo, break state,
+   weak points, lock-on camera, HP / boss bar / damage numbers, result screen with rank)
 3. Effects pass: post-processing, trails, beams, shockwaves
 4. Phases 2–3, transitions, finisher, HUD, title/result screens
 5. Audio, balance, quality settings, polish
@@ -144,6 +146,10 @@ Code layout (planned):
   - PC: keyboard + mouse with pointer lock (mouse-drag fallback if lock is blocked)
   - Mobile: floating virtual stick (left), drag-to-look (right), JUMP / DASH / HOOK buttons;
     grapple aim assist is wider on touch
+- **Lock-on camera** is on by default (huge boss above the arena). Turning the camera by hand
+  overrides it for ~0.7 s, so grappling elsewhere still works. Toggle: Tab / R / middle mouse / LOCK.
+- Step 2 ends the fight when Phase 1 is cleared (boss at 60 % HP); Phases 2–3 come in step 4.
+- Overdrive (ultimate) is deferred to the effects/polish steps.
 - Graphics presets: LOW (no post-processing), MEDIUM (bloom, mobile default), HIGH (bloom + shadows)
 
 ## 9. Open questions

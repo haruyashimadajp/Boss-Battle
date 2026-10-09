@@ -3,8 +3,9 @@
 A browser 3D boss-battle action game (Three.js, no build step).
 Design document: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)
 
-**Current state: Prototype 01 — movement.** Floating sky arena, placeholder boss,
-full movement kit, PC and mobile controls.
+**Current state: Prototype 02 — Phase 1 boss fight.** Floating sky arena, full movement kit,
+sword combat, and Phase 1 of the Seraph fight (laser sweeps, homing orbs, wing slams).
+PC and mobile controls.
 
 ## Run locally
 
@@ -35,12 +36,21 @@ PC:
     Space         jump / double jump (hold for higher jumps)
     Shift         air dash (2 charges, brief invincibility)
     Q / E / RMB   grapple (hold to reel in, release to slingshot)
+    LMB / J       attack (3-hit combo; in the air the 3rd hit is a plunge)
+    Tab / R / MMB lock-on camera on/off
     Esc           pause
 
-Mobile: left side virtual stick, drag on the right side to look, JUMP / DASH / HOOK buttons.
+Mobile: left side virtual stick, drag on the right side to look, ATK / JUMP / DASH / HOOK
+buttons, LOCK toggle at the top right.
 
-Tips: jump during a dash to keep its momentum (dash-jump). Grappling refills
-your dash charges and double jump. The dark circle under you shows where you'll land.
+Tips:
+- Dash *through* an attack for a PERFECT DODGE: the boss slows down for 1.5 s.
+- Slash the homing orbs to send them back into the core.
+- The pink orbs on the wings are weak points (and grapple targets). Destroying them fills the
+  break gauge fast. A full gauge makes the boss crash down: 2.5x damage for 6 s.
+- Jump during a dash to keep its momentum (dash-jump). Grappling refills your dash charges
+  and double jump. The dark circle under you shows where you'll land.
+- You have 6 HP. Falling into the void costs 1.
 
 ## Code layout
 
@@ -49,8 +59,9 @@ your dash charges and double jump. The dark circle under you shows where you'll 
     src/config.js          gameplay tuning values
     src/settings.js        persisted settings (controls, quality, sensitivity…)
     src/input/input.js     keyboard/mouse + touch → unified input state
-    src/camera.js          third-person camera (collision, FOV kick, shake)
-    src/player/            character controller and model
+    src/camera.js          third-person camera (lock-on, collision, FOV kick, shake)
+    src/player/            character controller, sword combat and model
+    src/boss/              boss (state machine, weak points, break) and its attacks
     src/world/             arena builder and collision
     src/fx/                particles/rings/afterimages, post-processing
     src/ui/                HUD and menus

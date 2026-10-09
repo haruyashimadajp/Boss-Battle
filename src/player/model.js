@@ -56,6 +56,15 @@ export function buildPlayerModel() {
   hand.position.set(0, -0.62, 0);
   armR.add(hand);
 
+  // Drawn sword, shown while attacking. The blade continues past the hand along the arm.
+  const handSword = new THREE.Group();
+  handSword.position.set(0, -0.62, 0.05);
+  handSword.rotation.x = -Math.PI / 2; // blade points forward when the arm hangs down
+  add(handSword, new THREE.BoxGeometry(0.07, 1.25, 0.03), glow, 0, 0.75, 0);
+  add(handSword, new THREE.BoxGeometry(0.3, 0.05, 0.07), trim, 0, 0.1, 0);
+  handSword.visible = false;
+  armR.add(handSword);
+
   const materials = [armor, trim, glow];
   let opacity = 1;
   const setOpacity = (o) => {
@@ -70,5 +79,5 @@ export function buildPlayerModel() {
     }
   };
 
-  return { root, body, legL, legR, armL, armR, hand, glow, setOpacity };
+  return { root, body, legL, legR, armL, armR, hand, glow, setOpacity, backSword: sword, handSword };
 }

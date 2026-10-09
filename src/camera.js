@@ -4,6 +4,7 @@ import { CAMERA as C, PLAYER as P } from './config.js';
 const damp = (a, b, k, dt) => a + (b - a) * (1 - Math.exp(-k * dt));
 const _off = new THREE.Vector3();
 const _want = new THREE.Vector3();
+const _to = new THREE.Vector3();
 
 // Third-person orbit camera with wall avoidance, speed FOV kick and trauma shake.
 export class CameraRig {
@@ -18,6 +19,10 @@ export class CameraRig {
     this.fov = C.fov;
     this.t = 0;
     this.ray = new THREE.Raycaster();
+    // Lock-on: the camera turns to keep the boss in view unless the player is steering it.
+    this.locked = true;
+    this.lockTarget = null; // () => Vector3 | null
+    this.lookIdle = 99;
   }
 
   snap(player) {
@@ -35,6 +40,24 @@ export class CameraRig {
     this.t += dt;
     this.yaw -= input.lookX;
     this.pitch = THREE.MathUtils.clamp(this.pitch + input.lookY, C.pitchMin, C.pitchMax);
+    this.lookIdle = input.lookX !== 0 || input.lookY !== 0 ? 0 : this.lookIdle + dt;
+
+    const target = this.locked && this.lockTarget?.();
+    if (target && this.lookIdle > 0.7) {
+      _to.copy(target).sub(player.pos);
+      const horiz = Math.hypot(_to.x, _to.z);
+      if (horiz > 2) {
+        const wantYaw = Math.atan2(-_to.x, -_to.z);
+        // Look up at the boss, but not all the way: keep the player in frame.
+        const elev = Math.atan2(_to.y - C.height, horiz);
+        const wantPitch = THREE.MathUtils.clamp(-elev * 0.75 + 0.12, C.pitchMin, 0.7);
+        let d = wantYaw - this.yaw;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        const k = 1 - Math.exp(-4 * dt);
+        this.yaw += d * k;
+        this.pitch += (wantPitch - this.pitch) * k;
+      }
+    }
 
     // Follow: tight horizontally, softer vertically so jumps don't jerk the view.
     const tx = player.pos.x;
@@ -52,10 +75,13 @@ export class CameraRig {
     this.ray.set(this.focus, _off);
     this.ray.far = C.distance + 0.5;
     const hit = this.ray.intersectObjects(this.world.solids, false)[0];
-    if (hit) want = Math.max(C.minDistance, hit.distance - 0.45);
+    // Looking up from a platform: rest the camera on the floor instead of zooming into the player.
+    const floor = hit && hit.face && hit.face.normal.y > 0.6 && this.pitch < 0;
+    if (hit && !floor) want = Math.max(C.minDistance, hit.distance - 0.45);
     this.dist = want < this.dist ? want : damp(this.dist, want, 5, dt);
 
     _want.copy(this.focus).addScaledVector(_off, this.dist);
+    if (floor) _want.y = Math.max(_want.y, hit.point.y + 0.45);
     this.camera.position.copy(_want);
     this.camera.lookAt(this.focus);
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PLAYER as P } from '../config.js';
+import { PLAYER as P, COMBAT } from '../config.js';
 import { resolve, probeGround, groundHeightBelow } from '../world/collision.js';
 import { buildPlayerModel } from './model.js';
 
@@ -13,13 +13,20 @@ const _dir = new THREE.Vector3();
 const _camPos = new THREE.Vector3();
 const _camDir = new THREE.Vector3();
 
+const _hit = new THREE.Vector3();
+const _pt = new THREE.Vector3();
+
 const COLOR = { cyan: 0x46e6ff, violet: 0xb77dff, white: 0xffffff };
 
 export class Player {
   constructor(scene, world, fx, events) {
     this.world = world;
     this.fx = fx;
-    this.events = events; // { shake(amount), flash(color, alpha) }
+    // events: shake(a), flash(color, alpha), onAttackHit(target, attack, point, dir),
+    //         onPlungeLand(pos, attack), onDeath()
+    this.events = events;
+    // Returns the things the sword can hit: [{ id, pos, r, kind }]. Set by the game.
+    this.targets = () => [];
 
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
@@ -53,6 +60,14 @@ export class Player {
   }
 
   respawn(initial = false) {
+    if (initial) {
+      this.hp = P.maxHp;
+      this.dead = false;
+    }
+    this.hurtT = 0;
+    this.stunT = 0;
+    this.dashAge = 99;
+    this.combat = { active: null, step: 0, air: false, t: 0, queued: false, idle: 99, hitSet: new Set(), target: null, dir: new THREE.Vector3(0, 0, -1), recover: 0 };
     const c = initial ? this.world.spawnCollider : (this.safeGround || this.world.spawnCollider);
     this.pos.set(c.x, c.yMax, c.z);
     if (initial) this.pos.copy(this.world.spawn);
@@ -81,6 +96,7 @@ export class Player {
   get dashing() { return this.dashT > 0; }
   get grappling() { return this.grapple.state !== 'idle'; }
   get invulnerable() { return this.iframes > 0; }
+  get attacking() { return this.combat.active !== null; }
   get center() { return _tmp2.set(this.pos.x, this.pos.y + P.height * 0.55, this.pos.z); }
 
   update(dt, input, rig, camera, controlMode) {
@@ -92,8 +108,15 @@ export class Player {
     this.jumpBuf = Math.max(0, this.jumpBuf - dt);
     this.dashCd = Math.max(0, this.dashCd - dt);
     this.iframes = Math.max(0, this.iframes - dt);
+    this.hurtT = Math.max(0, this.hurtT - dt);
+    this.stunT = Math.max(0, this.stunT - dt);
+    this.dashAge += dt;
     g.cd = Math.max(0, g.cd - dt);
-    if (input.jumpPressed) this.jumpBuf = P.jumpBuffer;
+    const cb = this.combat;
+    cb.recover = Math.max(0, cb.recover - dt);
+    if (!cb.active) cb.idle += dt;
+    const stunned = this.stunT > 0;
+    if (input.jumpPressed && !stunned) this.jumpBuf = P.jumpBuffer;
 
     // ---- Ride moving platforms ----
     if (this.grounded && this.ground) {
@@ -111,6 +134,7 @@ export class Player {
       0,
       -Math.sin(rig.yaw) * input.move.x + fz * input.move.y,
     );
+    if (stunned) _wish.set(0, 0, 0);
     const wishLen = Math.min(1, _wish.length());
 
     // ---- Grapple targeting ----
@@ -120,8 +144,10 @@ export class Player {
     for (const a of this.world.anchors) a.targeted = a === (this.grappling ? g.anchor : this.target);
 
     // ---- Dash ----
-    if (input.dashPressed && this.dashCharges > 0 && this.dashCd <= 0) {
+    if (input.dashPressed && !stunned && this.dashCharges > 0 && this.dashCd <= 0) {
       if (this.grappling) this.endGrapple(false);
+      cb.active = null; // dash cancels a swing
+      this.dashAge = 0;
       if (wishLen > 0.1) this.dashDir.copy(_wish).normalize();
       else this.dashDir.set(Math.sin(this.facing), 0, Math.cos(this.facing));
       this.dashCharges--;
@@ -142,7 +168,8 @@ export class Player {
     // after a grapple ends you must release before it grabs again.
     if (!input.grappleHeld) g.needRelease = false;
     if ((input.grapplePressed || (input.grappleHeld && !g.needRelease))
-        && g.state === 'idle' && g.cd <= 0 && this.target) {
+        && !stunned && g.state === 'idle' && g.cd <= 0 && this.target) {
+      cb.active = null;
       g.state = 'firing';
       g.anchor = this.target;
       g.t = 0;
@@ -157,6 +184,12 @@ export class Player {
     if (this.dashing && this.jumpBuf > 0 && (this.grounded || this.coyote > 0 || this.airJumps > 0)) {
       this.dashT = 0;
       this.vel.copy(this.dashDir).multiplyScalar(Math.max(P.runSpeed, P.dashExitSpeed * 1.25));
+    }
+
+    // ---- Sword ----
+    if (input.attackPressed && !stunned && !this.dashing && !this.grappling && cb.recover <= 0) {
+      if (cb.active) cb.queued = true;
+      else this.startAttack(wishLen);
     }
 
     if (this.dashing) {
@@ -175,6 +208,8 @@ export class Player {
       }
     } else if (g.state !== 'idle') {
       this.updateGrapple(dt);
+    } else if (cb.active) {
+      this.updateAttack(dt, wishLen);
     } else {
       this.updateLocomotion(dt, input, wishLen);
     }
@@ -291,12 +326,157 @@ export class Player {
     }
   }
 
+  // ---------- Sword ----------
+
+  findAttackTarget() {
+    const c = this.center;
+    let best = null;
+    let bestScore = Infinity;
+    for (const t of this.targets()) {
+      const surface = t.pos.distanceTo(c) - t.r;
+      if (surface > COMBAT.assistRange) continue;
+      const score = surface - (t.kind === 'weak' ? 3 : 0);
+      if (score < bestScore) { bestScore = score; best = t; }
+    }
+    return best;
+  }
+
+  startAttack(wishLen) {
+    const cb = this.combat;
+    const air = !this.grounded;
+    if (cb.idle > COMBAT.comboReset || cb.air !== air) cb.step = 0;
+    const list = air ? COMBAT.air : COMBAT.ground;
+    const def = list[cb.step];
+    cb.step = (cb.step + 1) % list.length;
+    Object.assign(cb, { active: def, air, t: 0, queued: false, idle: 0, slashed: false });
+    cb.hitSet.clear();
+
+    // Aim assist: turn toward (and lunge at) the nearest target in range.
+    cb.target = this.findAttackTarget();
+    const c = this.center;
+    if (cb.target) {
+      cb.dir.copy(cb.target.pos).sub(c);
+      if (!air) cb.dir.y = 0;
+    } else if (wishLen > 0.1) {
+      cb.dir.copy(_wish);
+    } else {
+      cb.dir.set(Math.sin(this.facing), 0, Math.cos(this.facing));
+    }
+    if (cb.dir.lengthSq() < 1e-6) cb.dir.set(Math.sin(this.facing), 0, Math.cos(this.facing));
+    cb.dir.normalize();
+    this.facing = Math.atan2(cb.dir.x, cb.dir.z);
+
+    if (def.plunge) {
+      this.vel.set(cb.dir.x * 4, -COMBAT.plungeSpeed * 0.3, cb.dir.z * 4);
+      this.fx.ring(c, { color: COLOR.cyan, from: 0.5, to: 2.5, life: 0.25 });
+    } else if (air) {
+      this.vel.y = Math.max(this.vel.y, COMBAT.airHover);
+    }
+  }
+
+  updateAttack(dt) {
+    const cb = this.combat;
+    const def = cb.active;
+    cb.t += dt;
+
+    if (def.plunge) {
+      // Accelerate into the dive, hitting everything on the way down.
+      this.vel.y = Math.max(-COMBAT.plungeSpeed, this.vel.y - 160 * dt);
+      this.ghostT -= dt;
+      if (this.ghostT <= 0) {
+        this.fx.afterimage({ color: COLOR.cyan, life: 0.25, alpha: 0.45 });
+        this.ghostT = 0.035;
+      }
+      _hit.copy(this.center);
+      _hit.y -= 0.5;
+      this.attackHitCheck(def, _hit);
+      if (cb.t > 1.6) cb.active = null; // fell past everything
+      return;
+    }
+
+    const c = this.center;
+    if (cb.t < def.hitStart) {
+      // Wind-up: lunge toward the target unless already in reach.
+      let speed = def.lunge;
+      if (cb.target && cb.target.pos.distanceTo(c) - cb.target.r < def.reach * 0.7) speed = 0;
+      this.vel.x = cb.dir.x * speed;
+      this.vel.z = cb.dir.z * speed;
+      if (cb.air) this.vel.y = cb.target ? cb.dir.y * speed + COMBAT.airHover * 0.5 : Math.max(this.vel.y, 0);
+    } else {
+      const k = Math.exp(-(cb.air ? 6 : 14) * dt);
+      this.vel.x *= k;
+      this.vel.z *= k;
+    }
+    if (!this.grounded) {
+      const gmul = cb.air ? 0.25 : 1;
+      this.vel.y = Math.max(-P.maxFallSpeed, this.vel.y - P.gravity * gmul * dt);
+    }
+
+    if (cb.t >= def.hitStart && !cb.slashed) {
+      cb.slashed = true;
+      _pt.copy(c).addScaledVector(cb.dir, 0.4);
+      this.fx.slash(_pt, cb.dir, {
+        roll: def.roll, flip: def.flip, radius: def.reach * 1.2,
+        color: def.heavy ? 0x9ff4ff : COLOR.cyan, sweep: def.hitEnd - def.hitStart + 0.02,
+      });
+    }
+    if (cb.t >= def.hitStart && cb.t <= def.hitEnd) {
+      this.attackHitCheck(def, _hit.copy(c).addScaledVector(cb.dir, def.reach * 0.55));
+    }
+    if (cb.queued && cb.t >= def.cancel) {
+      cb.active = null;
+      this.startAttack(0);
+      return;
+    }
+    if (cb.t >= def.dur) cb.active = null;
+  }
+
+  attackHitCheck(def, hitCenter) {
+    const cb = this.combat;
+    for (const t of this.targets()) {
+      if (cb.hitSet.has(t.id)) continue;
+      if (t.pos.distanceTo(hitCenter) > def.reach + t.r) continue;
+      cb.hitSet.add(t.id);
+      // Contact point on the target's surface, facing the player.
+      _pt.copy(hitCenter).sub(t.pos);
+      if (_pt.lengthSq() < 1e-6) _pt.set(0, 1, 0);
+      _pt.setLength(Math.min(t.r, t.pos.distanceTo(hitCenter))).add(t.pos);
+      this.events.onAttackHit(t, def, _pt.clone(), cb.dir.clone());
+    }
+  }
+
+  // ---------- Taking damage ----------
+
+  // Returns 'perfect' (dodged during dash i-frames), 'ignored' (still invulnerable) or 'hit'.
+  takeDamage(dmg, from) {
+    if (this.dead) return 'ignored';
+    if (this.iframes > 0) return 'perfect';
+    if (this.hurtT > 0) return 'ignored';
+    this.hp = Math.max(0, this.hp - dmg);
+    this.hurtT = P.hurtIFrames;
+    this.stunT = P.hurtStun;
+    this.combat.active = null;
+    this.dashT = 0;
+    if (this.grappling) this.endGrapple(false);
+    _tmp.copy(this.pos).sub(from).setY(0);
+    if (_tmp.lengthSq() < 1e-4) _tmp.set(Math.sin(this.facing), 0, Math.cos(this.facing)).negate();
+    _tmp.normalize();
+    this.vel.set(_tmp.x * 12, 9, _tmp.z * 12);
+    this.grounded = false;
+    if (this.hp <= 0) {
+      this.dead = true;
+      this.events.onDeath();
+    }
+    return 'hit';
+  }
+
   findTarget(controlMode) {
     const cone = Math.cos(((controlMode === 'mobile' ? P.grappleConeDegTouch : P.grappleConeDeg) * Math.PI) / 180);
     let best = null;
     let bestScore = -Infinity;
     const c = this.center;
     for (const a of this.world.anchors) {
+      if (!a.active) continue;
       const dist = a.pos.distanceTo(c);
       if (dist > P.grappleRange || dist < 3) continue;
       _tmp.copy(a.pos).sub(_camPos).normalize();
@@ -369,6 +549,15 @@ export class Player {
   onLand(vy) {
     this.airJumps = P.airJumps;
     this.dashCharges = P.dashCharges;
+    const cb = this.combat;
+    if (cb.active?.plunge) {
+      this.events.onPlungeLand(this.pos.clone(), cb.active);
+      cb.active = null;
+      cb.recover = 0.25;
+      this.landSquash = 0.5;
+      return;
+    }
+    if (cb.active) cb.air = false;
     const hard = Math.min(1, Math.max(0, (-vy - 10) / 30));
     this.landSquash = 0.15 + hard * 0.35;
     if (hard > 0) {
@@ -381,7 +570,18 @@ export class Player {
   fallOut() {
     this.events.flash('#b77dff', 0.6);
     this.events.shake(0.3);
+    // Hard mode: the void costs HP.
+    this.hp = Math.max(0, this.hp - P.fallDamage);
+    this.events.onFall?.();
+    if (this.hp <= 0) {
+      this.dead = true;
+      this.events.onDeath();
+      return;
+    }
+    const hp = this.hp;
     this.respawn();
+    this.hp = hp;
+    this.hurtT = P.hurtIFrames;
   }
 
   updateVisuals(dt, wishLen) {
@@ -414,6 +614,26 @@ export class Player {
     m.legR.rotation.x = this.grounded ? -swing : -0.2;
     m.armL.rotation.x = -swing * 0.7;
     m.armR.rotation.x = this.grappling ? -2.6 : swing * 0.7;
+    m.armR.rotation.z = 0;
+
+    // Sword: drawn while fighting, sheathed otherwise.
+    const cb = this.combat;
+    const drawn = cb.active !== null || cb.idle < 0.8;
+    m.handSword.visible = drawn;
+    m.backSword.visible = !drawn;
+    if (cb.active) {
+      const def = cb.active;
+      if (def.plunge) {
+        m.armR.rotation.x = -2.9;
+      } else {
+        const k = THREE.MathUtils.smoothstep(cb.t, def.hitStart - 0.06, def.hitEnd);
+        m.armR.rotation.x = THREE.MathUtils.lerp(-2.6, 0.4, k);
+        m.armR.rotation.z = (def.flip ? -1 : 1) * Math.cos(def.roll) * THREE.MathUtils.lerp(0.9, -0.9, k);
+      }
+    }
+
+    // Blink while recovering from a hit.
+    m.root.visible = this.hurtT <= 0 || Math.floor(this.hurtT * 18) % 2 === 0;
 
     // Glow pulses while invulnerable.
     m.glow.emissiveIntensity = this.iframes > 0 ? 6 : this.grappling ? 4 : 2.6;

@@ -19,6 +19,8 @@ export class Input {
     this.dashPressed = false;
     this.grappleHeld = false;
     this.grapplePressed = false;
+    this.attackPressed = false;
+    this.lockPressed = false;
 
     this.enabled = false;
     this.pointerLocked = false;
@@ -70,12 +72,14 @@ export class Input {
         return;
       }
       if (!this.enabled) return;
-      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
       if (e.repeat) return;
       this.keys.add(e.code);
       if (e.code === 'Space') this.jumpPressed = true;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.dashPressed = true;
       if (e.code === 'KeyQ' || e.code === 'KeyE') this.grapplePressed = true;
+      if (e.code === 'KeyJ') this.attackPressed = true;
+      if (e.code === 'Tab' || e.code === 'KeyR') this.lockPressed = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
   }
@@ -98,6 +102,8 @@ export class Input {
         this.requestLock();
         this.dragLook = true;
       }
+      if (e.button === 0) this.attackPressed = true;
+      if (e.button === 1) { e.preventDefault(); this.lockPressed = true; }
       if (e.button === 2) {
         this.mouseGrapple = true;
         this.grapplePressed = true;
@@ -199,6 +205,8 @@ export class Input {
         if (!this.enabled) return;
         if (action === 'jump') { this.jumpPressed = true; this.touchButtons.jump = true; }
         if (action === 'dash') this.dashPressed = true;
+        if (action === 'attack') this.attackPressed = true;
+        if (action === 'lock') this.lockPressed = true;
         if (action === 'grapple') { this.grapplePressed = true; this.touchButtons.grapple = true; }
       });
       const up = () => {
@@ -239,5 +247,7 @@ export class Input {
     this.jumpPressed = false;
     this.dashPressed = false;
     this.grapplePressed = false;
+    this.attackPressed = false;
+    this.lockPressed = false;
   }
 }

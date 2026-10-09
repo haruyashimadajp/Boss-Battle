@@ -7,6 +7,8 @@ const HELP = {
     ['SPACE', 'Jump / double jump'],
     ['SHIFT', 'Air dash'],
     ['Q / RMB', 'Grapple (hold)'],
+    ['LMB / J', 'Attack (air: 3rd hit plunges)'],
+    ['TAB / MMB', 'Lock-on camera on/off'],
     ['ESC', 'Pause'],
   ],
   mobile: [
@@ -15,6 +17,8 @@ const HELP = {
     ['JUMP', 'Jump / double jump'],
     ['DASH', 'Air dash'],
     ['HOOK', 'Grapple (hold)'],
+    ['ATK', 'Attack (air: 3rd hit plunges)'],
+    ['LOCK', 'Lock-on camera on/off'],
   ],
 };
 
@@ -25,6 +29,7 @@ export class Menus {
     this.cb = { onStart, onResume, onPause, onRespawn, onQuit, onApply };
     this.el = {
       title: document.getElementById('title-screen'),
+      result: document.getElementById('result-screen'),
       pause: document.getElementById('pause-screen'),
       settings: document.getElementById('settings-screen'),
       touch: document.getElementById('touch'),
@@ -40,7 +45,9 @@ export class Menus {
     on('btn-title-settings', () => this.openSettings('title'));
     on('btn-resume', () => this.cb.onResume());
     on('btn-pause-settings', () => this.openSettings('pause'));
-    on('btn-respawn', () => { this.cb.onRespawn(); this.cb.onResume(); });
+    on('btn-respawn', () => this.cb.onRespawn());
+    on('btn-retry', () => this.cb.onStart());
+    on('btn-result-title', () => this.cb.onQuit());
     on('btn-quit', () => this.cb.onQuit());
     on('btn-settings-back', () => this.closeSettings());
     this.el.menuBtn.addEventListener('click', () => this.cb.onPause());
@@ -81,6 +88,7 @@ export class Menus {
     this.state = state;
     this.el.title.hidden = state !== 'title';
     this.el.pause.hidden = state !== 'paused';
+    this.el.result.hidden = state !== 'result';
     this.el.settings.hidden = true;
     this.refreshControls();
   }
@@ -89,6 +97,15 @@ export class Menus {
     const mobile = this.settings.controlMode === 'mobile';
     this.el.touch.hidden = !(this.state === 'playing' && mobile);
     this.el.menuBtn.hidden = this.state !== 'playing';
+  }
+
+  // stats: { win, rank, rows: [[label, value], ...] }
+  showResult({ win, rank, rows }) {
+    const panel = this.el.result.querySelector('.panel');
+    panel.classList.toggle('lose', !win);
+    document.getElementById('result-title').textContent = win ? 'PHASE 1 CLEAR' : 'DEFEATED';
+    document.getElementById('result-rank').textContent = rank;
+    document.getElementById('result-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   }
 
   openSettings(from) {

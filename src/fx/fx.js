@@ -5,7 +5,8 @@ export class FX {
   constructor(scene) {
     this.scene = scene;
     this.rings = new RingPool(scene, 24);
-    this.sparks = new SparkPool(scene, 600);
+    this.sparks = new SparkPool(scene, 900);
+    this.slashes = new SlashPool(scene, 8);
     this.ghosts = null; // created once the player model exists
   }
 
@@ -16,8 +17,10 @@ export class FX {
   ring(pos, opts) { this.rings.spawn(pos, opts); }
   burst(pos, opts) { this.sparks.burst(pos, opts); }
   afterimage(opts) { this.ghosts?.spawn(opts); }
+  slash(pos, forward, opts) { this.slashes.spawn(pos, forward, opts); }
 
   update(dt) {
+    this.slashes.update(dt);
     this.rings.update(dt);
     this.sparks.update(dt);
     this.ghosts?.update(dt);
@@ -168,6 +171,12 @@ class SparkPool {
   }
 }
 
+// True when the object and all its ancestors are visible.
+function isShown(o) {
+  for (let p = o; p; p = p.parent) if (!p.visible) return false;
+  return true;
+}
+
 // Ghost copies of the player model that fade out (dash / grapple trails).
 class AfterimagePool {
   constructor(scene, model, n) {
@@ -197,7 +206,7 @@ class AfterimagePool {
     it.meshes.forEach((m, i) => {
       m.matrix.copy(this.sources[i].matrixWorld);
       m.matrixWorldNeedsUpdate = true;
-      m.visible = this.sources[i].visible;
+      m.visible = isShown(this.sources[i]);
     });
     it.mat.color.set(color);
     Object.assign(it, { t: 0, life, alpha, alive: true });
@@ -214,6 +223,114 @@ class AfterimagePool {
         continue;
       }
       it.mat.opacity = it.alpha * (1 - k);
+    }
+  }
+}
+
+// Sword slash arcs: a ring sector swept by a bright head with a fading tail.
+const SLASH_VERT = /* glsl */ `
+  varying vec2 vLocal;
+  void main() {
+    vLocal = position.xy;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }`;
+const SLASH_FRAG = /* glsl */ `
+  uniform float uProgress;
+  uniform float uFade;
+  uniform float uThetaStart;
+  uniform float uThetaLen;
+  uniform float uInner;
+  uniform float uOuter;
+  uniform float uFlip;
+  uniform vec3 uColor;
+  varying vec2 vLocal;
+  void main() {
+    float a = atan(vLocal.y, vLocal.x);
+    float u = clamp((a - uThetaStart) / uThetaLen, 0.0, 1.0);
+    if (uFlip > 0.5) u = 1.0 - u;
+    float r = (length(vLocal) - uInner) / (uOuter - uInner);
+    float head = uProgress * 1.25;
+    float tail = smoothstep(head - 0.75, head, u) * step(u, head);
+    float edge = pow(clamp(r, 0.0, 1.0), 2.5);
+    float alpha = tail * (0.25 + edge * 1.4) * uFade;
+    vec3 col = mix(uColor, vec3(1.0), edge * 0.8) * (1.2 + edge * 2.5);
+    gl_FragColor = vec4(col, alpha);
+  }`;
+
+const _x = new THREE.Vector3();
+const _y = new THREE.Vector3();
+const _z = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+
+class SlashPool {
+  constructor(scene, n) {
+    this.items = [];
+    const thetaLen = Math.PI * 1.15;
+    const thetaStart = Math.PI / 2 - thetaLen / 2;
+    for (let i = 0; i < n; i++) {
+      const inner = 0.5;
+      const outer = 1;
+      const geo = new THREE.RingGeometry(inner, outer, 40, 1, thetaStart, thetaLen);
+      const mat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        vertexShader: SLASH_VERT,
+        fragmentShader: SLASH_FRAG,
+        uniforms: {
+          uProgress: { value: 0 },
+          uFade: { value: 1 },
+          uThetaStart: { value: thetaStart },
+          uThetaLen: { value: thetaLen },
+          uInner: { value: inner },
+          uOuter: { value: outer },
+          uFlip: { value: 0 },
+          uColor: { value: new THREE.Color(0x46e6ff) },
+        },
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+      this.items.push({ mesh, t: 0, life: 0.25, sweep: 0.1 });
+    }
+    this.next = 0;
+  }
+
+  // forward: swing direction; roll rotates the arc plane around it (0 = horizontal).
+  spawn(pos, forward, { roll = 0, flip = false, radius = 2.2, color = 0x46e6ff, sweep = 0.09, life = 0.26 } = {}) {
+    const it = this.items[this.next];
+    this.next = (this.next + 1) % this.items.length;
+    _y.copy(forward).normalize();
+    _x.set(0, 1, 0).cross(_y);
+    if (_x.lengthSq() < 1e-4) _x.set(1, 0, 0);
+    _x.normalize();
+    _z.crossVectors(_x, _y).normalize(); // arc plane normal
+    // Rotate the arc's spread axis (x) toward z by roll.
+    _x.multiplyScalar(Math.cos(roll)).addScaledVector(_z, Math.sin(roll)).normalize();
+    _z.crossVectors(_x, _y).normalize();
+    _m.makeBasis(_x, _y, _z);
+    it.mesh.quaternion.setFromRotationMatrix(_m);
+    it.mesh.position.copy(pos);
+    it.mesh.scale.setScalar(radius);
+    const u = it.mesh.material.uniforms;
+    u.uFlip.value = flip ? 1 : 0;
+    u.uColor.value.set(color);
+    u.uProgress.value = 0;
+    u.uFade.value = 1;
+    it.mesh.visible = true;
+    Object.assign(it, { t: 0, life, sweep });
+  }
+
+  update(dt) {
+    for (const it of this.items) {
+      if (!it.mesh.visible) continue;
+      it.t += dt;
+      const u = it.mesh.material.uniforms;
+      u.uProgress.value = Math.min(1, it.t / it.sweep);
+      u.uFade.value = 1 - Math.max(0, (it.t - it.sweep) / (it.life - it.sweep));
+      if (it.t >= it.life) it.mesh.visible = false;
     }
   }
 }

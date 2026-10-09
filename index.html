@@ -26,13 +26,27 @@
     <div id="hud" hidden>
       <div id="crosshair"></div>
       <div id="reticle"><span></span></div>
+      <div id="boss-bar" hidden>
+        <div class="boss-name">SERAPH OF THE BROKEN SUN</div>
+        <div class="boss-hp">
+          <div class="boss-hp-trail"></div>
+          <div class="boss-hp-fill"></div>
+          <div class="boss-hp-mark" title="Phase 1 ends here"></div>
+        </div>
+        <div class="boss-break"><div class="boss-break-fill"></div></div>
+      </div>
       <div id="status">
+        <div class="status-label">HP</div>
+        <div id="hp-pips"></div>
         <div class="status-label">DASH</div>
         <div id="dash-pips"></div>
         <div class="status-label">AIR</div>
         <div id="air-pips"></div>
       </div>
       <div id="fps" hidden></div>
+      <div id="combo"><b>0</b><span>HITS</span></div>
+      <div id="banner"><span></span></div>
+      <div id="dmg-layer"></div>
     </div>
 
     <div id="flash"></div>
@@ -45,7 +59,9 @@
       </div>
       <button class="tbtn" id="btn-grapple" data-action="grapple">HOOK</button>
       <button class="tbtn" id="btn-dash" data-action="dash">DASH</button>
-      <button class="tbtn tbtn-big" id="btn-jump" data-action="jump">JUMP</button>
+      <button class="tbtn" id="btn-jump" data-action="jump">JUMP</button>
+      <button class="tbtn tbtn-big" id="btn-attack" data-action="attack">ATK</button>
+      <button class="tbtn tbtn-small on" id="btn-lock" data-action="lock">LOCK</button>
     </div>
 
     <button id="btn-menu" class="icon-btn" aria-label="Menu" hidden>
@@ -56,7 +72,7 @@
     <section id="title-screen" class="overlay">
       <div class="panel title-panel">
         <h1 class="logo">AETHER<br><span>BREAKER</span></h1>
-        <p class="subtitle">PROTOTYPE 01 — MOVEMENT</p>
+        <p class="subtitle">PROTOTYPE 02 — PHASE 1: HALO</p>
         <div class="controls-help" id="controls-help"></div>
         <div class="btn-row">
           <button class="btn primary" id="btn-start">START</button>
@@ -72,8 +88,21 @@
         <div class="btn-col">
           <button class="btn primary" id="btn-resume">RESUME</button>
           <button class="btn" id="btn-pause-settings">SETTINGS</button>
-          <button class="btn" id="btn-respawn">RESPAWN</button>
+          <button class="btn" id="btn-respawn">RESTART</button>
           <button class="btn" id="btn-quit">TITLE</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Result -->
+    <section id="result-screen" class="overlay" hidden>
+      <div class="panel result-panel">
+        <h2 id="result-title">PHASE 1 CLEAR</h2>
+        <div class="result-rank" id="result-rank">S</div>
+        <dl class="result-stats" id="result-stats"></dl>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-retry">RETRY</button>
+          <button class="btn" id="btn-result-title">TITLE</button>
         </div>
       </div>
     </section>

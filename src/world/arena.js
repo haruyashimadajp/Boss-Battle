@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { makeCyl, makeSphere } from './collision.js';
+import { makeCyl } from './collision.js';
 
-// Builds the sky arena: floating platforms, grapple anchors, a placeholder boss,
+// Builds the sky arena: floating platforms, grapple anchors,
 // sky, cloud sea and ambient particles. Everything is procedural (no asset files).
 
 const TAU = Math.PI * 2;
@@ -192,17 +192,19 @@ export function buildWorld(scene) {
   crystalGeo.scale(1, 1.5, 1);
   const ringGeo = new THREE.TorusGeometry(1.35, 0.04, 6, 40);
 
-  function anchor(parent, x, y, z) {
+  // kind 'crystal' = plain grapple point; the boss adds 'weak' anchors (its weak points).
+  function anchor(parent, x, y, z, { kind = 'crystal', crystal = null, ring = null } = {}) {
     const group = new THREE.Group();
-    const crystal = new THREE.Mesh(crystalGeo, MAT.crystal);
-    const ring = new THREE.Mesh(ringGeo, MAT.crystalRing);
+    crystal = crystal || new THREE.Mesh(crystalGeo, MAT.crystal);
+    ring = ring || new THREE.Mesh(ringGeo, MAT.crystalRing);
     group.add(crystal, ring);
     group.position.set(x, y, z);
     parent.add(group);
-    const a = { group, crystal, ring, pos: new THREE.Vector3(), targeted: false, phase: rand() * TAU };
+    const a = { group, crystal, ring, kind, active: true, pos: new THREE.Vector3(), targeted: false, phase: rand() * TAU };
     world.anchors.push(a);
     return a;
   }
+  world.addAnchor = anchor;
 
   for (let i = 0; i < 6; i++) {
     const [x, z] = polar(28, ((i + 0.5) / 6) * TAU);
@@ -213,61 +215,6 @@ export function buildWorld(scene) {
     anchor(scene, x, 31, z);
   }
   anchor(scene, 0, 12, 36);
-
-  // ---------- Placeholder boss (the real one comes in step 2) ----------
-  const boss = new THREE.Group();
-  boss.position.set(0, 30, 0);
-  scene.add(boss);
-
-  const coreMat = new THREE.MeshStandardMaterial({ color: 0x3a1a00, emissive: 0xffa53a, emissiveIntensity: 2.0 });
-  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(6, 3), coreMat);
-  boss.add(core);
-  world.solids.push(core);
-  const bossCol = makeSphere(0, 30, 0, 6);
-  world.colliders.push(bossCol);
-
-  const shell = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(7.2, 1),
-    new THREE.MeshBasicMaterial({ color: 0xffd38a, wireframe: true, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
-  );
-  boss.add(shell);
-
-  const haloTilt = new THREE.Group();
-  haloTilt.rotation.set(0.32, 0, 0.12);
-  boss.add(haloTilt);
-  const halo = new THREE.Group();
-  haloTilt.add(halo);
-  const haloGeo = new THREE.TorusGeometry(12.5, 0.38, 10, 120);
-  haloGeo.rotateX(Math.PI / 2);
-  halo.add(new THREE.Mesh(haloGeo, new THREE.MeshStandardMaterial({ color: 0x3a2400, emissive: 0xffc061, emissiveIntensity: 3 })));
-  for (let i = 0; i < 4; i++) {
-    const [x, z] = polar(12.5, (i / 4) * TAU + Math.PI / 4);
-    anchor(halo, x, 1.6, z);
-  }
-
-  const wingMat = new THREE.MeshStandardMaterial({ color: 0x1c1830, emissive: 0xff7a2a, emissiveIntensity: 0.35, metalness: 0.7, roughness: 0.3, flatShading: true });
-  const wings = new THREE.Group();
-  boss.add(wings);
-  for (let i = 0; i < 4; i++) {
-    const side = i % 2 === 0 ? 1 : -1;
-    const upper = i < 2;
-    const blade = new THREE.Mesh(new THREE.ConeGeometry(1.6, upper ? 20 : 14, 4), wingMat);
-    blade.scale.z = 0.25;
-    blade.position.set(side * (upper ? 11 : 9), upper ? 6 : -5, -3);
-    blade.rotation.z = side * (upper ? -1.0 : -2.3);
-    wings.add(blade);
-  }
-
-  const coreLight = new THREE.PointLight(0xffa64d, 1600, 0, 2);
-  boss.add(coreLight);
-
-  // Pillar of light falling from the core to the center platform.
-  const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.2, 3.5, 26, 24, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-  );
-  beam.position.set(0, 16, 0);
-  scene.add(beam);
 
   // ---------- Floating debris ----------
   const debrisCount = 70;
@@ -326,16 +273,8 @@ export function buildWorld(scene) {
       }
     }
 
-    boss.position.y = 30 + Math.sin(t * 0.5) * 0.6;
-    bossCol.y = boss.position.y;
-    core.rotation.y += dt * 0.15;
-    shell.rotation.y -= dt * 0.25;
-    shell.rotation.x += dt * 0.1;
-    halo.rotation.y += dt * 0.22;
-    wings.rotation.z = Math.sin(t * 0.7) * 0.05;
-    coreMat.emissiveIntensity = 1.9 + Math.sin(t * 2.2) * 0.25;
-
     for (const a of world.anchors) {
+      if (!a.active) continue;
       a.crystal.rotation.y += dt * 1.4;
       a.ring.rotation.x = Math.sin(t * 0.8 + a.phase) * 0.6 + Math.PI / 2;
       a.ring.rotation.y += dt * 0.9;
