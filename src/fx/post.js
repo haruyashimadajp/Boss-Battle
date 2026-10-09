@@ -125,6 +125,8 @@ const FinalShader = {
 // Colour grades (gain, lift, saturation). Phases 2-3 will add violet / crimson.
 const GRADES = {
   phase1: { gain: [1.04, 1.0, 0.94], lift: [0.0, 0.0, 0.01], sat: 1.05 },
+  phase2: { gain: [1.03, 0.98, 1.06], lift: [0.01, 0.0, 0.02], sat: 1.05 },
+  phase3: { gain: [1.08, 0.95, 0.95], lift: [0.02, 0.0, 0.0], sat: 1.08 },
   title: { gain: [1.0, 0.98, 1.02], lift: [0.0, 0.0, 0.0], sat: 1.0 },
   break: { gain: [1.04, 1.02, 1.0], lift: [0.0, 0.0, 0.01], sat: 0.8 },
   clear: { gain: [1.06, 1.0, 0.9], lift: [0.0, 0.0, 0.0], sat: 1.1 },

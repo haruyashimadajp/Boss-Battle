@@ -23,10 +23,10 @@ const HELP = {
 };
 
 export class Menus {
-  constructor({ settings, input, onStart, onResume, onPause, onRespawn, onQuit, onApply }) {
+  constructor({ settings, input, onStart, onResume, onPause, onRespawn, onCheckpoint, onQuit, onApply }) {
     this.settings = settings;
     this.input = input;
-    this.cb = { onStart, onResume, onPause, onRespawn, onQuit, onApply };
+    this.cb = { onStart, onResume, onPause, onRespawn, onCheckpoint, onQuit, onApply };
     this.el = {
       title: document.getElementById('title-screen'),
       result: document.getElementById('result-screen'),
@@ -47,6 +47,7 @@ export class Menus {
     on('btn-pause-settings', () => this.openSettings('pause'));
     on('btn-respawn', () => this.cb.onRespawn());
     on('btn-retry', () => this.cb.onStart());
+    on('btn-checkpoint', () => this.cb.onCheckpoint());
     on('btn-result-title', () => this.cb.onQuit());
     on('btn-quit', () => this.cb.onQuit());
     on('btn-settings-back', () => this.closeSettings());
@@ -99,11 +100,16 @@ export class Menus {
     this.el.menuBtn.hidden = this.state !== 'playing';
   }
 
-  // stats: { win, rank, rows: [[label, value], ...] }
-  showResult({ win, rank, rows }) {
+  // { win, title, rank, rows: [[label, value], ...], checkpoint: phase to retry from (0 = none) }
+  showResult({ win, title, rank, rows, checkpoint = 0 }) {
     const panel = this.el.result.querySelector('.panel');
     panel.classList.toggle('lose', !win);
-    document.getElementById('result-title').textContent = win ? 'PHASE 1 CLEAR' : 'DEFEATED';
+    document.getElementById('result-title').textContent = title;
+    const cp = document.getElementById('btn-checkpoint');
+    cp.hidden = !checkpoint;
+    cp.textContent = `FROM PHASE ${checkpoint}`;
+    document.getElementById('btn-retry').classList.toggle('primary', !checkpoint);
+    document.getElementById('btn-retry').textContent = checkpoint ? 'FULL RESTART' : 'RETRY';
     document.getElementById('result-rank').textContent = rank;
     document.getElementById('result-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   }

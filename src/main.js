@@ -29,7 +29,10 @@ const input = new Input(canvas, settings);
 
 const game = { state: 'title', time: 0, timeScale: 1 };
 // Per-fight state: hitstop, perfect-dodge slow-mo, ending sequence and stats.
-const fight = { hitstop: 0, witch: 0, ending: null, combo: 0, comboT: 0, stats: null, perfected: new WeakSet() };
+const fight = {
+  hitstop: 0, witch: 0, ending: null, combo: 0, comboT: 0, stats: null, perfected: new WeakSet(),
+  cine: null, finisher: null, checkpoint: 1,
+};
 let menus = null;
 
 const camNormal = new THREE.Vector3();
@@ -38,6 +41,7 @@ const _core = new THREE.Vector3();
 const _cam = new THREE.Vector3();
 const INTRO_TIME = 4.0;
 const BOSS_NAME = 'SERAPH OF THE BROKEN SUN';
+const PHASE_TITLES = { 2: ['SERAPHINA', 'PHASE 2 — ECLIPSE'], 3: ['SUPERNOVA', 'PHASE 3 — SERAPHINA AWAKENS'] };
 
 // ---------- Hit feedback helpers ----------
 const hitstop = (s) => { fight.hitstop = Math.max(fight.hitstop, s); };
@@ -127,7 +131,47 @@ const boss = new Boss(scene, world, fx, {
     rig.shake(0.5);
     post.pulse(0.9);
   },
-  onPhaseClear: () => endFight(true),
+  // HP hit the phase threshold: cinematic while the boss transforms.
+  onPhaseEnd: (phase) => {
+    fight.cine = { kind: 'transform', t: 0, from: phase, base: Math.atan2(player.pos.x, player.pos.z) + 0.5 };
+    fight.witch = 0;
+    setCinematic(true);
+    hitstop(0.3);
+    rig.shake(0.8);
+    post.pulse(1.2);
+    hud.flash('#ffffff', 0.6);
+    hud.banner(`PHASE ${phase} CLEAR`, 'gold', 1.6);
+    boss.getCorePos(_v);
+    fx.ring(_v, { color: 0xffffff, from: 2, to: 26, life: 0.8, normal: camNormal });
+  },
+  onTransformFlash: (phase) => {
+    hud.flash(phase === 3 ? '#ff4060' : '#ffffff', 0.85);
+    rig.shake(1);
+    post.pulse(1.5);
+    setTimeout(() => hud.banner(...PHASE_TITLES[phase].slice(0, 1), phase === 3 ? 'bad' : 'gold', 2.4), 900);
+  },
+  // New phase begins: checkpoint, some HP back, player placed on solid ground.
+  onPhaseStart: (phase) => {
+    fight.cine = null;
+    setCinematic(false);
+    fight.checkpoint = phase;
+    fight.stats.phase = phase;
+    hud.setBossPhase(phase, boss.name);
+    hud.banner(PHASE_TITLES[phase][1], phase === 3 ? 'bad' : 'perfect', 1.8);
+    const hp = Math.min(PLAYER.maxHp, player.hp + BOSS.phaseHeal);
+    player.respawn();
+    player.hp = hp;
+    rig.snap(player);
+    rig.lookIdle = 99;
+  },
+  onFinisherReady: () => {
+    fight.finisher = { t: 0 };
+    hud.banner('FINISH IT!', 'gold', 1.8);
+    hud.showFinisher(true);
+    hitstop(0.25);
+    rig.shake(0.6);
+  },
+  onDefeated: () => endFight(true),
   onIntroDone: () => {},
 });
 
@@ -136,6 +180,8 @@ boss.ctx = {
   hitPlayer,
   shake: (a) => rig.shake(a),
   shockwave: (pos, o) => post.shockwave(pos, o),
+  banner: (text, cls, d) => hud.banner(text, cls, d),
+  flash: (c, a) => hud.flash(c, a),
   impactFlash: (dist) => { if (dist < 25) hud.flash('#ffd8a0', 0.25); },
   onReflectHit: () => {
     const res = boss.takeHit('reflect', BOSS.reflectDmg);
@@ -149,11 +195,11 @@ boss.ctx = {
 };
 player.targets = () => boss.getTargets([]);
 const _lock = new THREE.Vector3();
-rig.lockTarget = () => (boss.active ? boss.getCorePos(_lock) : null);
+rig.lockTarget = () => (['dormant', 'dying', 'dead'].includes(boss.state) ? null : boss.getCorePos(_lock));
 
 // Boss attack reaches the player. Returns 'hit' | 'perfect' | 'ignored'.
 function hitPlayer(dmg, from, source) {
-  if (game.state !== 'playing' || fight.ending) return 'ignored';
+  if (game.state !== 'playing' || fight.ending || fight.cine || fight.finisher) return 'ignored';
   const r = player.takeDamage(dmg, from);
   if (r === 'perfect') {
     if (!fight.perfected.has(source)) {
@@ -188,8 +234,8 @@ function perfectDodge() {
 }
 
 // ---------- Fight flow ----------
-function newStats() {
-  return { start: game.time, time: 0, dealt: 0, damageTaken: 0, perfects: 0, maxCombo: 0, reflects: 0, breaks: 0 };
+function newStats(fromPhase = 1) {
+  return { start: game.time, time: 0, dealt: 0, damageTaken: 0, perfects: 0, maxCombo: 0, reflects: 0, breaks: 0, phase: fromPhase, fromPhase };
 }
 
 function setState(state) {
@@ -205,19 +251,36 @@ function setCinematic(on, skippable = false) {
   document.body.classList.toggle('skippable', on && skippable);
 }
 
-function start() {
+function resetFight(phase) {
   player.respawn(true);
-  boss.reset();
+  boss.reset(phase);
   rig.snap(player);
   Object.assign(fight, {
-    hitstop: 0, witch: 0, ending: null, combo: 0, comboT: 0, stats: newStats(), perfected: new WeakSet(),
-    cine: { kind: 'intro', t: 0 }, skipReq: false,
+    hitstop: 0, witch: 0, ending: null, combo: 0, comboT: 0, stats: newStats(phase), perfected: new WeakSet(),
+    cine: null, skipReq: false, finisher: null, checkpoint: phase,
   });
   game.timeScale = 1;
   hud.resetBoss();
+  hud.setBossPhase(phase, boss.name);
+  hud.showFinisher(false);
   hud.combo(0);
+}
+
+function start() {
+  resetFight(1);
+  fight.cine = { kind: 'intro', t: 0 };
   resume();
   setCinematic(true, true);
+}
+
+// Retry from the start of the phase you died in (checkpoint).
+function continueFromCheckpoint() {
+  const phase = fight.checkpoint;
+  resetFight(phase);
+  boss.start(1.2);
+  setCinematic(false);
+  resume();
+  hud.banner(PHASE_TITLES[phase][1], phase === 3 ? 'bad' : 'perfect', 1.8);
 }
 
 // Boss reveal finished (or skipped): hand the camera back to the player.
@@ -256,6 +319,26 @@ function cinematicCamera(c) {
       fov = 46;
       camera.position.copy(_cam);
       camera.lookAt(core);
+    }
+  } else if (c.kind === 'transform') {
+    // Orbit the boss while it changes form; push in once the angel appears.
+    const a = c.base + c.t * 0.3;
+    const r = c.from === 1 ? (c.t < 1.6 ? 46 : 46 - Math.min(1, (c.t - 1.6) / 2) * 20) : 24;
+    camera.position.set(core.x + Math.sin(a) * r, core.y + (c.from === 1 ? 4 : 2), core.z + Math.cos(a) * r);
+    camera.lookAt(core);
+    fov = 50;
+  } else if (c.kind === 'finale') {
+    // Behind the player as they dive into her heart, then a slow orbit as she fades.
+    if (c.t < c.dive) {
+      _cam.copy(player.pos).sub(c.heart).setY(0).normalize();
+      camera.position.copy(player.pos).addScaledVector(_cam, 5).add(_v.set(0, 2.2, 0));
+      camera.lookAt(c.heart);
+      fov = 70;
+    } else {
+      const a = c.base + (c.t - c.dive) * 0.25;
+      camera.position.set(core.x + Math.sin(a) * 16, core.y + 1.5, core.z + Math.cos(a) * 16);
+      camera.lookAt(core);
+      fov = 48;
     }
   } else if (c.kind === 'clear') {
     const a = c.base + c.t * 0.35;
@@ -301,13 +384,14 @@ function toTitle() {
 function endFight(win) {
   if (fight.ending) return;
   fight.stats.time = (game.time - fight.stats.start);
-  fight.ending = { win, t: win ? 2.8 : 2.0 };
+  fight.ending = { win, t: win ? 3.2 : 2.0 };
+  hud.showFinisher(false);
   game.timeScale = win ? 0.3 : 0.25;
   fight.witch = 0;
   fight.cine = { kind: win ? 'clear' : 'dead', t: 0, base: Math.atan2(player.pos.x, player.pos.z) + 0.6 };
   setCinematic(true);
   if (win) {
-    hud.banner('PHASE 1 CLEAR', 'gold', 2.4);
+    hud.banner('VICTORY', 'gold', 2.6);
     hud.flash('#ffffff', 0.8);
     rig.shake(0.9);
     post.pulse(1.5);
@@ -323,7 +407,8 @@ function endFight(win) {
 }
 
 function rankFor(s) {
-  const score = 100 - s.time / 3 - s.damageTaken * 12 + s.perfects * 4 + Math.min(10, s.maxCombo / 3);
+  // Tuned for a full run of all three phases (roughly 6-10 minutes).
+  const score = 100 - s.time / 9 - s.damageTaken * 5 + s.perfects * 2 + Math.min(10, s.maxCombo / 4) + s.breaks * 2;
   if (score >= 80) return 'S';
   if (score >= 60) return 'A';
   if (score >= 40) return 'B';
@@ -335,18 +420,25 @@ function showResult(win) {
   const s = fight.stats;
   const m = Math.floor(s.time / 60);
   const sec = (s.time % 60).toFixed(1).padStart(4, '0');
-  const bossLeft = Math.round(((boss.hp - boss.phaseEndHp) / (BOSS.maxHp - boss.phaseEndHp)) * 100);
+  const bossLeft = Math.round((boss.hp / BOSS.maxHp) * 100);
   const rows = [
     ['Time', `${m}:${sec}`],
     ['Damage taken', `${s.damageTaken}`],
     ['Perfect dodges', `${s.perfects}`],
     ['Max combo', `${s.maxCombo}`],
+    ['Breaks', `${s.breaks}`],
   ];
-  if (!win) rows.push(['Phase 1 HP left', `${bossLeft}%`]);
-  else rows.push(['Breaks', `${s.breaks}`]);
+  if (!win) rows.push(['Reached', `Phase ${s.phase} · boss HP ${bossLeft}%`]);
+  if (win && s.fromPhase > 1) rows.push(['Started from', `Phase ${s.fromPhase}`]);
   fight.cine = null;
   setCinematic(false);
-  menus.showResult({ win, rank: win ? rankFor(s) : '—', rows });
+  menus.showResult({
+    win,
+    title: win ? 'VICTORY' : 'DEFEATED',
+    rank: win ? rankFor(s) : '—',
+    rows,
+    checkpoint: !win && fight.checkpoint > 1 ? fight.checkpoint : 0,
+  });
   input.exitLock();
   input.releaseAll();
   setState('result');
@@ -365,6 +457,7 @@ menus = new Menus({
   onResume: resume,
   onPause: pause,
   onRespawn: start,
+  onCheckpoint: continueFromCheckpoint,
   onQuit: toTitle,
   onApply: (mode) => {
     const q = settings.get('quality');
@@ -425,9 +518,48 @@ function step(rawDt) {
   world.update(bossDt, game.time, camera);
   boss.update(bossDt, game.time, playing ? player : null);
 
+  // Finisher: wait for the attack button (or a few seconds), then dive into her heart.
+  if (playing && fight.finisher && !fight.cine) {
+    fight.finisher.t += rawDt;
+    if (input.attackPressed || fight.finisher.t > 6) {
+      hud.showFinisher(false);
+      fight.finisher = null;
+      const heart = boss.weakPoints[0].anchor.pos.clone();
+      fight.cine = { kind: 'finale', t: 0, dive: 1.1, from: player.pos.clone(), heart, base: Math.atan2(player.pos.x - heart.x, player.pos.z - heart.z) };
+      setCinematic(true);
+      hud.banner('', '', 0.1);
+    }
+  }
+
   const cine = playing ? fight.cine : null;
   if (cine) {
     cine.t += rawDt;
+    if (cine.kind === 'finale') {
+      if (cine.t < cine.dive) {
+        // Swoop along an arc into the heart jewel.
+        const k = cine.t / cine.dive;
+        const e = k * k;
+        player.pos.lerpVectors(cine.from, cine.heart, e);
+        player.pos.y += Math.sin(k * Math.PI) * 4 - 1.0 * e;
+        player.vel.set(0, 0, 0);
+        player.facing = Math.atan2(cine.heart.x - player.pos.x, cine.heart.z - player.pos.z);
+        player.combat.active = { plunge: true, dur: 9, hitStart: 0, hitEnd: 9 };
+        if (Math.random() < 0.8) fx.afterimage({ color: 0x46e6ff, life: 0.3, alpha: 0.5 });
+      } else if (!cine.hit) {
+        cine.hit = true;
+        player.combat.active = null;
+        hitstop(0.35);
+        hud.flash('#ffffff', 1);
+        rig.shake(1);
+        post.pulse(1.5);
+        post.shockwave(cine.heart, { strength: 2.4, speed: 0.6, life: 1.2 });
+        fx.ring(cine.heart, { color: 0xffffff, from: 1, to: 30, life: 0.8, normal: camNormal });
+        fx.burst(cine.heart, { count: 120, color: 0xfff0c8, speed: 30, life: 1, size: 0.7 });
+        boss.beginDissolve();
+        // The player drops onto the nearest platform below.
+        player.respawn();
+      }
+    }
     if (cine.kind === 'intro') {
       if (cine.t >= 1.5 && !cine.bossStarted) {
         cine.bossStarted = true;
@@ -446,9 +578,9 @@ function step(rawDt) {
       document.getElementById('btn-lock').classList.toggle('on', rig.locked);
       hud.banner(rig.locked ? 'LOCK-ON' : 'FREE CAMERA', '', 0.7);
     }
-    const intro = fight.cine?.kind === 'intro';
-    if (!player.dead && !intro) player.update(dt, input, rig, camera, settings.controlMode);
-    else if (intro) player.updateVisuals(dt, 0); // stand idle at the spawn point
+    const frozen = ['intro', 'transform', 'finale'].includes(fight.cine?.kind);
+    if (!player.dead && !frozen) player.update(dt, input, rig, camera, settings.controlMode);
+    else if (frozen) player.updateVisuals(dt, 0); // hold still during cinematics
     if (fight.cine) cinematicCamera(fight.cine);
     else rig.update(dt, player, input);
     // Fade the player out when the camera is pushed right up against them.
@@ -468,6 +600,8 @@ function step(rawDt) {
   if (game.state === 'title') { grade = 'title'; rays = 0.3; }
   else if (fight.ending) { grade = fight.ending.win ? 'clear' : 'dead'; rays = fight.ending.win ? 0.5 : 0.1; }
   else if (boss.broken) { grade = 'break'; rays = 0.3; }
+  else if (boss.phase === 2) { grade = 'phase2'; rays = 0.12; }
+  else if (boss.phase === 3) { grade = 'phase3'; rays = 0.12; }
   post.setGrade(grade);
   post.setGodRays(_core, rays);
   let speed = 0;

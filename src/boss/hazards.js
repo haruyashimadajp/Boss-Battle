@@ -17,13 +17,13 @@ const _q = new THREE.Vector3();
 const _seg = new THREE.Vector3();
 const _end = new THREE.Vector3();
 
-const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true).translate(0, 0.5, 0);
-const additive = (color, opacity = 1, extra = {}) => new THREE.MeshBasicMaterial({
+export const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true).translate(0, 0.5, 0);
+export const additive = (color, opacity = 1, extra = {}) => new THREE.MeshBasicMaterial({
   color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, ...extra,
 });
 
 // Returns the platform collider containing p, or null.
-function pointInPlatform(p, colliders) {
+export function pointInPlatform(p, colliders) {
   for (const c of colliders) {
     if (c.type !== 'cyl') continue;
     if (p.y < c.yMin || p.y > c.yMax) continue;
@@ -35,7 +35,7 @@ function pointInPlatform(p, colliders) {
 }
 
 // Energy beam: brightest where the surface faces the camera, with noise scrolling along it.
-function beamMaterial(color, intensity, power) {
+export function beamMaterial(color, intensity, power) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -87,7 +87,7 @@ function beamMaterial(color, intensity, power) {
   });
 }
 
-function distToSegment(p, a, b) {
+export function distToSegment(p, a, b) {
   _seg.subVectors(b, a);
   const len2 = _seg.lengthSq();
   const t = len2 > 0 ? THREE.MathUtils.clamp(_q.subVectors(p, a).dot(_seg) / len2, 0, 1) : 0;
@@ -104,7 +104,7 @@ function beamToPlayer(player, a, b) {
   return d;
 }
 
-class Hazard {
+export class Hazard {
   constructor(ctx) {
     this.ctx = ctx;
     this.t = 0;

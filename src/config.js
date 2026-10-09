@@ -72,6 +72,9 @@ export const COMBAT = {
 export const BOSS = {
   maxHp: 10000,
   phase1End: 0.6, // fraction of HP where Phase 1 ends
+  phase2End: 0.25, // fraction of HP where Phase 2 ends (Phase 3 runs to 0)
+  angelWeakHp: 320, // wing jewels in Phase 2
+  phaseHeal: 3, // HP restored to the player when a new phase begins
   hoverY: 30,
   coreRadius: 6,
   brokenY: 10,

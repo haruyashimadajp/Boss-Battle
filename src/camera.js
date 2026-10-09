@@ -83,6 +83,14 @@ export class CameraRig {
 
     _want.copy(this.focus).addScaledVector(_off, this.dist);
     if (floor) _want.y = Math.max(_want.y, hit.point.y + 0.45);
+    // Never end up inside a platform (moving platforms can sweep into the camera).
+    for (const c of this.world.colliders) {
+      if (c.type !== 'cyl') continue;
+      const dx = _want.x - c.x;
+      const dz = _want.z - c.z;
+      const r = c.r + 0.35;
+      if (dx * dx + dz * dz < r * r && _want.y > c.yMin - 0.3 && _want.y < c.yMax + 0.4) _want.y = c.yMax + 0.4;
+    }
     this.camera.position.copy(_want);
     this.camera.lookAt(this.focus);
 

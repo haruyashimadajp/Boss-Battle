@@ -22,7 +22,10 @@ export class HUD {
     this.bossFill = this.bossBar.querySelector('.boss-hp-fill');
     this.bossTrail = this.bossBar.querySelector('.boss-hp-trail');
     this.breakFill = this.bossBar.querySelector('.boss-break-fill');
-    this.bossBar.querySelector('.boss-hp-mark').style.left = `${BOSS.phase1End * 100}%`;
+    this.bossBar.querySelector('[data-mark="1"]').style.left = `${BOSS.phase1End * 100}%`;
+    this.bossBar.querySelector('[data-mark="2"]').style.left = `${BOSS.phase2End * 100}%`;
+    this.bossName = this.bossBar.querySelector('.boss-name');
+    this.finisherEl = document.getElementById('finisher-prompt');
     this.trail = 1;
     this.trailHold = 0;
 
@@ -93,6 +96,11 @@ export class HUD {
   show(on) { this.root.hidden = !on; }
   showFps(on) { this.fpsEl.hidden = !on; }
   showBoss(on) { this.bossBar.hidden = !on; }
+  showFinisher(on) { this.finisherEl.hidden = !on; }
+  setBossPhase(phase, name) {
+    this.bossBar.dataset.phase = phase;
+    this.bossName.textContent = name;
+  }
 
   flash(color = '#ffffff', alpha = 0.6) {
     const f = this.flashEl;

@@ -51,21 +51,28 @@ Arena: ring of floating rock platforms around the boss.
 - Wing slam: hits a platform, shockwave ring + platform cracks
 - Weak points: 4 wing cores (reach them via grapple anchors on the wings)
 
-### Phase 2 — ECLIPSE (60–25 %)
-Transition cutscene: sky darkens, the sun goes eclipsed, platforms break apart
-and start orbiting slowly. The floor becomes a void (falling = damage + respawn).
-- Blade halo: the halo splits into 8 spinning blades sweeping the arena
-- Spiral barrage: bullet-hell spiral of light shots
-- Gravity well: pulls the player in, then explodes
-- Ride mechanic: grapple onto the boss's rotating halo to reach the core
+### Phase 2 — ECLIPSE (60–25 %) — Seraphina
+The Seraph's core cracks open and **Seraphina** hatches from it: a ~9 m angel girl
+(anime toon style: big eyes, blonde twin tails with pink ribbons, halo, white feathered wings,
+white-and-gold dress, star staff). The center platform crumbles; the arena slowly orbits.
+- Halo blades: her halo splits into a spinning ring of blades with gaps (slip through / jump / dash)
+- Spiral barrage: rotating arms of light bullets aimed through your height
+- Gravity well: black star at your position pulls you in, then bursts (dash or grapple out)
+- Lance dash: aims her staff (red line) and charges through your position
+- Also reuses the laser sweep and homing orbs; layered combos below 45 %
+- Weak points: 4 wing jewels (grapple targets). Grapple points on her upper wing tips
 
 ### Phase 3 — SUPERNOVA (25–0 %)
-Boss armor shatters, red/black color grading, music intensifies.
-- Meteor rain with ground markers
-- Annihilation beam: screen-wide charge; hide behind a pillar or perfect-dodge
-- Desperation combo: chains all previous attacks faster
-- Finisher: at 0 HP → "BREAK" prompt → slow-mo dive into the core,
-  white flash, boss dissolves into particles, result screen
+Crimson wings, red eyes, angry face; sky turns crimson, arena orbits faster, shorter pauses.
+- Meteor rain with ground markers (half of them around you)
+- Annihilation beam: long charge, red cylinder shows the line; platforms and pillars block it
+- Faster blades / spiral / lance; frequent combos, near-constant below 10 %
+- Weak point: heart jewel on her chest
+- Finisher: at 0 HP she is dazed → "FINISH IT" → press attack → slow-motion dive into her heart,
+  white flash, she smiles and dissolves into light → VICTORY + rank
+
+Checkpoints at the start of Phases 2 and 3 (result screen offers "FROM PHASE N").
+Each new phase restores 3 HP.
 
 ## 4. Effects ("make it flashy")
 
@@ -135,7 +142,9 @@ Code layout (planned):
    per-state colour grading, sword ribbon trail, noise-shaded laser with scorch trails,
    debris/crystal shards, charge-up particles, letterboxed intro and phase-clear cinematics,
    REDUCED setting for shake / flashes / distortion)
-4. Phases 2–3, transitions, finisher, HUD, title/result screens
+4. ✅ Phases 2–3, transitions, finisher, HUD, title/result screens
+   (Seraphina angel-girl form, 6 new attacks, orbiting arena, transform cinematics,
+   checkpoints, dissolve finale)
 5. Audio, balance, quality settings, polish
 
 ## 8. Decisions
@@ -152,7 +161,7 @@ Code layout (planned):
     grapple aim assist is wider on touch
 - **Lock-on camera** is on by default (huge boss above the arena). Turning the camera by hand
   overrides it for ~0.7 s, so grappling elsewhere still works. Toggle: Tab / R / middle mouse / LOCK.
-- Step 2 ends the fight when Phase 1 is cleared (boss at 60 % HP); Phases 2–3 come in step 4.
+- Phases 2–3 boss is a humanoid angel girl (user request), kept cute and wholesome.
 - Overdrive (ultimate) is deferred to the effects/polish steps.
 - Graphics presets: LOW (no post-processing), MEDIUM (bloom, mobile default), HIGH (bloom + shadows)
 

@@ -75,7 +75,8 @@ export class Player {
     this.stunT = 0;
     this.dashAge = 99;
     this.combat = { active: null, step: 0, air: false, t: 0, queued: false, idle: 99, hitSet: new Set(), target: null, dir: new THREE.Vector3(0, 0, -1), recover: 0 };
-    const c = initial ? this.world.spawnCollider : (this.safeGround || this.world.spawnCollider);
+    let c = initial ? this.world.spawnCollider : (this.safeGround || this.world.spawnCollider);
+    if (c.yMax < -100) c = this.world.spawnCollider; // that platform has fallen away
     this.pos.set(c.x, c.yMax, c.z);
     if (initial) this.pos.copy(this.world.spawn);
     this.vel.set(0, 0, 0);
@@ -242,7 +243,8 @@ export class Player {
         this.vel.y = 0;
         this.grounded = true;
         this.ground = c;
-        if (Math.abs(c.dx) + Math.abs(c.dz) + Math.abs(c.dy) < 1e-6) this.safeGround = c;
+        // Remember solid ground for respawns (moving platforms count; their collider moves with them).
+        if (c.r >= 2.4) this.safeGround = c;
       }
     }
 

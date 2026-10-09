@@ -64,7 +64,10 @@ export function buildWorld(scene) {
     colliders: [],
     anchors: [],
     solids: [], // meshes the camera should not clip through
-    movers: [],
+    platforms: [],
+    phase: 1,
+    orbitSpeed: 0, // whole-arena rotation speed (rad/s), raised in Phases 2-3
+    orbitAngle: 0,
     spawn: new THREE.Vector3(0, 0, 42),
     spawnCollider: null,
     lights: {},
@@ -123,15 +126,19 @@ export function buildWorld(scene) {
     const cols = [makeCyl(x, z, r, y - 1.2, y), makeCyl(x, z, r * 0.55, y - 1.2 - depth * 0.5, y - 1.2)];
     world.colliders.push(...cols);
 
-    const p = { group, cols, x, y, z, r, depth };
-    if (opts.motion) {
-      p.motion = opts.motion;
-      world.movers.push(p);
-    }
+    const p = {
+      group, cols, x, y, z, r, depth, attached: [],
+      motion: opts.motion || null,
+      // Polar placement, so Phases 2-3 can set the whole arena orbiting the boss.
+      R: Math.hypot(x, z), a0: Math.atan2(x, z), dir: 1, crumble: null,
+    };
+    for (const c of cols) { c.ox = 0; c.oz = 0; c.top0 = c.yMax - y; c.bot0 = c.yMin - y; }
+    world.platforms.push(p);
     return p;
   }
 
-  function pillar(px, z, baseY, h, r = 1.1) {
+  // A pillar standing on platform p (moves with it).
+  function pillar(p, px, z, baseY, h, r = 1.1) {
     const geo = jitterGeometry(new THREE.CylinderGeometry(r * 0.85, r, h, 7, 3), 0.15);
     const m = new THREE.Mesh(geo, MAT.pillar);
     m.position.set(px, baseY + h / 2, z);
@@ -143,7 +150,11 @@ export function buildWorld(scene) {
     addOutline(m, { ...OUTLINE, filter: (o) => o === m });
     scene.add(m);
     world.solids.push(m);
-    world.colliders.push(makeCyl(px, z, r, baseY, baseY + h));
+    const col = makeCyl(px, z, r, baseY, baseY + h);
+    col.ox = px - p.x; col.oz = z - p.z; col.top0 = baseY + h - p.y; col.bot0 = baseY - p.y;
+    world.colliders.push(col);
+    p.cols.push(col);
+    p.attached.push({ mesh: m, ox: px - p.x, oz: z - p.z, oy: baseY + h / 2 - p.y });
   }
 
   const polar = (R, a) => [R * Math.sin(a), R * Math.cos(a)];
@@ -152,8 +163,8 @@ export function buildWorld(scene) {
   const start = platform(0, 0, 42, 7);
   world.spawnCollider = start.cols[0];
 
-  // Center platform beneath the boss.
-  platform(0, 3, 0, 9);
+  // Center platform beneath the boss (crumbles when Phase 2 begins).
+  world.center = platform(0, 3, 0, 9);
 
   // Outer ring.
   const outerH = [0, 2, 5, 1, 7, 3, 9, 4, 6, 2];
@@ -161,10 +172,10 @@ export function buildWorld(scene) {
     const a = (i / 10) * TAU;
     const [x, z] = polar(40, a);
     const r = 4.5 + rand() * 1.5;
-    platform(x, outerH[i], z, r);
+    const p = platform(x, outerH[i], z, r);
     if (i % 3 === 0) {
       const [ox, oz] = polar(r * 0.45, a + 1.2);
-      pillar(x + ox, z + oz, outerH[i], 9 + rand() * 4);
+      pillar(p, x + ox, z + oz, outerH[i], 9 + rand() * 4);
     }
   }
 
@@ -186,13 +197,13 @@ export function buildWorld(scene) {
     let motion = null;
     if (i === 1) motion = { type: 'bob', amp: 3, speed: 0.9 };
     if (i === 4) motion = { type: 'orbit', radius: 22, angle: a, speed: 0.12, y: innerH[i] };
-    platform(x, innerH[i], z, 3.5, { motion });
+    platform(x, innerH[i], z, 3.5, { motion }).dir = -1;
   }
 
   // High perches, reached by grappling.
   for (const deg of [30, 150, 270]) {
     const [x, z] = polar(33, (deg * Math.PI) / 180);
-    platform(x, 22, z, 4);
+    platform(x, 22, z, 4).dir = -1;
   }
 
   // ---------- Grapple anchors ----------
@@ -252,33 +263,56 @@ export function buildWorld(scene) {
     clouds.material.uniforms.uTime.value = t;
     embers.material.uniforms.uTime.value = t;
 
-    for (const p of world.movers) {
+    // Arena rotation (Phases 2-3) eases toward its target speed.
+    world.orbitSpeed += ((world.orbitTarget || 0) - world.orbitSpeed) * Math.min(1, dt * 0.5);
+    world.orbitAngle += world.orbitSpeed * dt;
+    for (const p of world.platforms) {
       const m = p.motion;
-      let nx = p.x;
+      let ang = p.a0 + world.orbitAngle * p.dir;
       let ny = p.y;
-      let nz = p.z;
-      if (m.type === 'bob') ny = p.y + Math.sin(t * m.speed) * m.amp;
-      if (m.type === 'orbit') {
-        const a = m.angle + t * m.speed;
-        nx = Math.sin(a) * m.radius;
-        nz = Math.cos(a) * m.radius;
+      if (m?.type === 'bob') ny += Math.sin(t * m.speed) * m.amp;
+      if (m?.type === 'orbit') ang += t * m.speed;
+      if (p.crumble) {
+        p.crumble.t += dt;
+        p.crumble.v += 14 * dt;
+        p.crumble.y -= p.crumble.v * dt;
+        ny = p.y + p.crumble.y;
+        p.group.rotation.x += dt * 0.3;
+        p.group.rotation.z += dt * 0.2;
+        if (p.crumble.t > 6) p.group.visible = false;
       }
+      const nx = p.R > 0.01 ? Math.sin(ang) * p.R : p.x;
+      const nz = p.R > 0.01 ? Math.cos(ang) * p.R : p.z;
       const prev = p.group.position;
       const ddx = nx - prev.x;
       const ddy = ny - prev.y;
       const ddz = nz - prev.z;
+      if (ddx === 0 && ddy === 0 && ddz === 0) {
+        for (const c of p.cols) c.dx = c.dy = c.dz = 0;
+        continue;
+      }
       p.group.position.set(nx, ny, nz);
-      p.cols[0].yMax = ny;
-      p.cols[0].yMin = ny - 1.2;
-      p.cols[1].yMax = ny - 1.2;
-      p.cols[1].yMin = ny - 1.2 - p.depth * 0.5;
       for (const c of p.cols) {
-        c.x = nx;
-        c.z = nz;
+        c.x = nx + c.ox;
+        c.z = nz + c.oz;
+        c.yMax = p.crumble ? -1e4 : ny + c.top0;
+        c.yMin = p.crumble ? -1e4 - 1 : ny + c.bot0;
         c.dx = ddx;
         c.dy = ddy;
         c.dz = ddz;
       }
+      for (const at of p.attached) {
+        at.mesh.position.set(nx + at.ox, ny + at.oy, nz + at.oz);
+        at.mesh.updateMatrixWorld();
+      }
+      // Keep matrices current for camera raycasts within this frame.
+      p.group.updateMatrixWorld();
+    }
+
+    // Phase colour shift for sky and clouds.
+    const tint = world.tintTarget;
+    for (const u of [sky.mesh.material.uniforms.uTint, clouds.material.uniforms.uTint]) {
+      u.value.lerp(tint, Math.min(1, dt * 0.8));
     }
 
     for (const a of world.anchors) {
@@ -305,6 +339,30 @@ export function buildWorld(scene) {
     debris.instanceMatrix.needsUpdate = true;
   };
 
+  // Phase 2: center platform falls away and the arena starts to orbit. Phase 3: faster, crimson sky.
+  world.tintTarget = new THREE.Vector3(1, 1, 1);
+  world.setPhase = (phase, instant = false) => {
+    world.phase = phase;
+    world.orbitTarget = phase === 1 ? 0 : phase === 2 ? 0.05 : 0.085;
+    world.tintTarget.set(...(phase === 1 ? [1, 1, 1] : phase === 2 ? [1.25, 0.85, 1.45] : [1.7, 0.55, 0.65]));
+    const c = world.center;
+    if (phase >= 2 && !c.crumble) {
+      c.crumble = { t: instant ? 99 : 0, y: instant ? -400 : 0, v: 0 };
+    }
+    if (phase === 1) {
+      c.crumble = null;
+      c.group.visible = true;
+      c.group.rotation.set(0, c.group.rotation.y, 0);
+      world.orbitAngle = 0;
+      world.orbitSpeed = 0;
+    }
+    if (instant) {
+      world.orbitSpeed = world.orbitTarget;
+      sky.mesh.material.uniforms.uTint.value.copy(world.tintTarget);
+      clouds.material.uniforms.uTint.value.copy(world.tintTarget);
+    }
+  };
+
   return world;
 }
 
@@ -314,7 +372,7 @@ function buildSky() {
     side: THREE.BackSide,
     depthWrite: false,
     fog: false,
-    uniforms: {},
+    uniforms: { uTint: { value: new THREE.Vector3(1, 1, 1) } },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main() {
@@ -322,6 +380,7 @@ function buildSky() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: /* glsl */ `
+      uniform vec3 uTint;
       varying vec3 vDir;
       void main() {
         float h = vDir.y;
@@ -335,7 +394,7 @@ function buildSky() {
           : mix(hor, low, smoothstep(0.0, 0.25, -h));
         // Warm glow band on the horizon.
         col += vec3(0.32, 0.2, 0.28) * exp(-abs(h) * 22.0) * 0.35;
-        gl_FragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(col * uTint, 1.0);
       }`,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), mat);
@@ -366,7 +425,7 @@ function buildCloudSea() {
     transparent: true,
     depthWrite: false,
     fog: false,
-    uniforms: { uTime: { value: 0 } },
+    uniforms: { uTime: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) } },
     vertexShader: /* glsl */ `
       varying vec3 vWorld;
       void main() {
@@ -376,6 +435,7 @@ function buildCloudSea() {
       }`,
     fragmentShader: /* glsl */ `
       uniform float uTime;
+      uniform vec3 uTint;
       varying vec3 vWorld;
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       float noise(vec2 p) {
@@ -399,7 +459,7 @@ function buildCloudSea() {
         vec3 col = mix(deep, lit, smoothstep(0.35, 0.8, n));
         col += core * smoothstep(0.45, 0.9, n) * exp(-dist * 0.012) * 1.2;
         float alpha = smoothstep(0.25, 0.6, n) * (1.0 - smoothstep(300.0, 850.0, dist));
-        gl_FragColor = vec4(col, alpha * 0.95);
+        gl_FragColor = vec4(col * uTint, alpha * 0.95);
       }`,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1800, 1800, 1, 1), mat);

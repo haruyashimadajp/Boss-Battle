@@ -31,7 +31,8 @@
         <div class="boss-hp">
           <div class="boss-hp-trail"></div>
           <div class="boss-hp-fill"></div>
-          <div class="boss-hp-mark" title="Phase 1 ends here"></div>
+          <div class="boss-hp-mark" data-mark="1"></div>
+          <div class="boss-hp-mark" data-mark="2"></div>
         </div>
         <div class="boss-break"><div class="boss-break-fill"></div></div>
       </div>
@@ -48,6 +49,7 @@
       <div id="banner"><span></span></div>
       <div id="dmg-layer"></div>
       <div id="threats"></div>
+      <div id="finisher-prompt" hidden><b>FINISH IT</b><span class="pc-only">PRESS ATTACK</span><span class="mobile-only">TAP ATK</span></div>
     </div>
 
     <div id="flash"></div>
@@ -74,7 +76,7 @@
     <section id="title-screen" class="overlay">
       <div class="panel title-panel">
         <h1 class="logo">AETHER<br><span>BREAKER</span></h1>
-        <p class="subtitle">PROTOTYPE 03 — PHASE 1: HALO</p>
+        <p class="subtitle">PROTOTYPE 04 — FULL FIGHT</p>
         <div class="controls-help" id="controls-help"></div>
         <div class="btn-row">
           <button class="btn primary" id="btn-start">START</button>
@@ -103,6 +105,7 @@
         <div class="result-rank" id="result-rank">S</div>
         <dl class="result-stats" id="result-stats"></dl>
         <div class="btn-row">
+          <button class="btn primary" id="btn-checkpoint" hidden>FROM PHASE 2</button>
           <button class="btn primary" id="btn-retry">RETRY</button>
           <button class="btn" id="btn-result-title">TITLE</button>
         </div>
