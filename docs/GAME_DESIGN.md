@@ -126,15 +126,27 @@ Code layout (planned):
 
 ## 7. Milestones
 
-1. Movement prototype: controller, camera, jump/dash/grapple on platforms
+1. ✅ Movement prototype: controller, camera, jump/dash/grapple on platforms, settings, PC/mobile controls
 2. Combat + Phase 1 boss with hitstop / shake / sparks
 3. Effects pass: post-processing, trails, beams, shockwaves
 4. Phases 2–3, transitions, finisher, HUD, title/result screens
 5. Audio, balance, quality settings, polish
 
-## 8. Open questions
+## 8. Decisions
+
+- **Difficulty: hard.** Plan for the fight (step 2+):
+  - Player HP is small (about 6 hits); boss attacks hit hard; no healing mid-fight
+  - Falling into the void costs HP (in step 1 it only respawns you)
+  - Perfect-dodge window stays tight (~150 ms); boss combos chain with little downtime in Phase 3
+  - Checkpoint only at the start of each phase
+- **Platforms: PC and mobile**, switchable in Settings → Controls (AUTO / PC / MOBILE).
+  AUTO picks mobile on touch-first devices.
+  - PC: keyboard + mouse with pointer lock (mouse-drag fallback if lock is blocked)
+  - Mobile: floating virtual stick (left), drag-to-look (right), JUMP / DASH / HOOK buttons;
+    grapple aim assist is wider on touch
+- Graphics presets: LOW (no post-processing), MEDIUM (bloom, mobile default), HIGH (bloom + shadows)
+
+## 9. Open questions
 
 - Art direction: neon-celestial (current) vs. dark fantasy vs. sci-fi mecha
-- Weapon: sword only, or sword + gun hybrid
-- Difficulty target: casual-friendly or Souls-like
-- PC only, or also touch controls for mobile
+- Weapon: sword only (current assumption), or sword + gun hybrid

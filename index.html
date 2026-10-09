@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07051a">
+  <title>Aether Breaker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="ui">
+    <!-- In-game HUD -->
+    <div id="hud" hidden>
+      <div id="crosshair"></div>
+      <div id="reticle"><span></span></div>
+      <div id="status">
+        <div class="status-label">DASH</div>
+        <div id="dash-pips"></div>
+        <div class="status-label">AIR</div>
+        <div id="air-pips"></div>
+      </div>
+      <div id="fps" hidden></div>
+    </div>
+
+    <div id="flash"></div>
+
+    <!-- Touch controls (mobile mode) -->
+    <div id="touch" hidden>
+      <div id="look-zone"></div>
+      <div id="stick-zone">
+        <div id="stick-base"><div id="stick-knob"></div></div>
+      </div>
+      <button class="tbtn" id="btn-grapple" data-action="grapple">HOOK</button>
+      <button class="tbtn" id="btn-dash" data-action="dash">DASH</button>
+      <button class="tbtn tbtn-big" id="btn-jump" data-action="jump">JUMP</button>
+    </div>
+
+    <button id="btn-menu" class="icon-btn" aria-label="Menu" hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+    </button>
+
+    <!-- Title -->
+    <section id="title-screen" class="overlay">
+      <div class="panel title-panel">
+        <h1 class="logo">AETHER<br><span>BREAKER</span></h1>
+        <p class="subtitle">PROTOTYPE 01 — MOVEMENT</p>
+        <div class="controls-help" id="controls-help"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-start">START</button>
+          <button class="btn" id="btn-title-settings">SETTINGS</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pause -->
+    <section id="pause-screen" class="overlay" hidden>
+      <div class="panel">
+        <h2>PAUSED</h2>
+        <div class="btn-col">
+          <button class="btn primary" id="btn-resume">RESUME</button>
+          <button class="btn" id="btn-pause-settings">SETTINGS</button>
+          <button class="btn" id="btn-respawn">RESPAWN</button>
+          <button class="btn" id="btn-quit">TITLE</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings-screen" class="overlay" hidden>
+      <div class="panel settings-panel">
+        <h2>SETTINGS</h2>
+        <div class="setting">
+          <label>Controls</label>
+          <div class="seg" data-key="controls">
+            <button data-value="auto">AUTO</button>
+            <button data-value="pc">PC</button>
+            <button data-value="mobile">MOBILE</button>
+          </div>
+        </div>
+        <div class="setting">
+          <label>Graphics</label>
+          <div class="seg" data-key="quality">
+            <button data-value="low">LOW</button>
+            <button data-value="medium">MED</button>
+            <button data-value="high">HIGH</button>
+          </div>
+        </div>
+        <div class="setting">
+          <label>Camera sensitivity <output id="sens-out"></output></label>
+          <input type="range" id="sens" min="0.2" max="3" step="0.1">
+        </div>
+        <div class="setting">
+          <label>Invert Y</label>
+          <div class="seg" data-key="invertY">
+            <button data-value="false">OFF</button>
+            <button data-value="true">ON</button>
+          </div>
+        </div>
+        <div class="setting">
+          <label>Show FPS</label>
+          <div class="seg" data-key="showFps">
+            <button data-value="false">OFF</button>
+            <button data-value="true">ON</button>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-settings-back">BACK</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
