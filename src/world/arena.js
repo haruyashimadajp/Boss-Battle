@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { makeCyl } from './collision.js';
+import { addOutline, addRim } from '../fx/outline.js';
 
 // Builds the sky arena: floating platforms, grapple anchors,
 // sky, cloud sea and ambient particles. Everything is procedural (no asset files).
@@ -44,14 +45,19 @@ function jitterGeometry(geo, amount, keepTopY = Infinity) {
 }
 
 const MAT = {
-  rock: new THREE.MeshStandardMaterial({ color: 0x2c2740, roughness: 0.92, metalness: 0.05, flatShading: true }),
-  slab: new THREE.MeshStandardMaterial({ color: 0x575073, roughness: 0.75, metalness: 0.15, flatShading: true }),
+  rock: new THREE.MeshStandardMaterial({ color: 0x2a2638, roughness: 0.92, metalness: 0.05, flatShading: true }),
+  slab: new THREE.MeshStandardMaterial({ color: 0x6c6a8c, roughness: 0.75, metalness: 0.15, flatShading: true }),
   rune: new THREE.MeshStandardMaterial({ color: 0x0a2a33, emissive: 0x3fd8ff, emissiveIntensity: 1.6 }),
   pillar: new THREE.MeshStandardMaterial({ color: 0x3b3554, roughness: 0.6, metalness: 0.3, flatShading: true }),
   pillarBand: new THREE.MeshStandardMaterial({ color: 0x220b12, emissive: 0xff9a3c, emissiveIntensity: 2.2 }),
   crystal: new THREE.MeshStandardMaterial({ color: 0x2a0f40, emissive: 0xb77dff, emissiveIntensity: 2.4, flatShading: true }),
   crystalRing: new THREE.MeshBasicMaterial({ color: 0xd9b8ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }),
 };
+// Cool rim light so platform silhouettes separate from the sky.
+addRim(MAT.slab, 0x8fb8ff, 0.12, 3.0); // weak: platform tops are seen at grazing angles
+addRim(MAT.rock, 0x5a74c8, 0.45, 2.0);
+addRim(MAT.pillar, 0x8fb8ff, 0.4, 2.2);
+const OUTLINE = { color: 0x04030a, thickness: 0.0032 };
 
 export function buildWorld(scene) {
   const world = {
@@ -67,7 +73,7 @@ export function buildWorld(scene) {
   const rand = mulberry32(7);
 
   scene.background = new THREE.Color(0x07051a);
-  scene.fog = new THREE.FogExp2(0x1d1236, 0.0058);
+  scene.fog = new THREE.FogExp2(0x161b36, 0.0042);
 
   const sky = buildSky();
   scene.add(sky.mesh, sky.stars);
@@ -77,8 +83,8 @@ export function buildWorld(scene) {
   scene.add(embers);
 
   // ---------- Lights ----------
-  const hemi = new THREE.HemisphereLight(0x8c7dff, 0x5a2440, 1.1); // warm bounce from the cloud sea
-  const moon = new THREE.DirectionalLight(0xc4d6ff, 1.7);
+  const hemi = new THREE.HemisphereLight(0xa8b8ff, 0x2c2848, 1.25);
+  const moon = new THREE.DirectionalLight(0xd4e0ff, 2.0);
   moon.position.set(-30, 60, 20);
   moon.shadow.mapSize.set(1024, 1024);
   const sc = moon.shadow.camera;
@@ -104,6 +110,7 @@ export function buildWorld(scene) {
     rune.rotation.x = Math.PI / 2;
     rune.position.y = 0.02;
     group.add(top, under, rune);
+    addOutline(group, { ...OUTLINE, filter: (o) => o !== rune });
     group.position.set(x, y, z);
     group.rotation.y = rand() * TAU;
     for (const m of [top, under]) {
@@ -133,6 +140,7 @@ export function buildWorld(scene) {
     band.rotation.x = Math.PI / 2;
     band.position.y = h * 0.3;
     m.add(band);
+    addOutline(m, { ...OUTLINE, filter: (o) => o === m });
     scene.add(m);
     world.solids.push(m);
     world.colliders.push(makeCyl(px, z, r, baseY, baseY + h));
@@ -222,7 +230,7 @@ export function buildWorld(scene) {
   const debrisData = [];
   for (let i = 0; i < debrisCount; i++) {
     const a = rand() * TAU;
-    const R = 55 + rand() * 70;
+    const R = 75 + rand() * 70;
     debrisData.push({
       x: Math.sin(a) * R,
       y: -25 + rand() * 75,
@@ -317,15 +325,16 @@ function buildSky() {
       varying vec3 vDir;
       void main() {
         float h = vDir.y;
-        vec3 top = vec3(0.012, 0.01, 0.05);
-        vec3 mid = vec3(0.10, 0.045, 0.22);
-        vec3 hor = vec3(0.55, 0.20, 0.30);
-        vec3 low = vec3(0.07, 0.03, 0.12);
+        // Cool, low-saturation night sky so the warm boss attacks stand out.
+        vec3 top = vec3(0.008, 0.01, 0.035);
+        vec3 mid = vec3(0.04, 0.05, 0.14);
+        vec3 hor = vec3(0.17, 0.17, 0.33);
+        vec3 low = vec3(0.03, 0.035, 0.09);
         vec3 col = h > 0.0
           ? mix(mix(hor, mid, smoothstep(0.0, 0.18, h)), top, smoothstep(0.18, 0.8, h))
           : mix(hor, low, smoothstep(0.0, 0.25, -h));
         // Warm glow band on the horizon.
-        col += vec3(0.5, 0.18, 0.08) * exp(-abs(h) * 22.0) * 0.6;
+        col += vec3(0.32, 0.2, 0.28) * exp(-abs(h) * 22.0) * 0.35;
         gl_FragColor = vec4(col, 1.0);
       }`,
   });
@@ -384,9 +393,9 @@ function buildCloudSea() {
         float n = fbm(p + vec2(uTime * 0.012, uTime * 0.006));
         n = fbm(p + n * 1.6 - vec2(uTime * 0.008, 0.0));
         float dist = length(vWorld.xz);
-        vec3 deep = vec3(0.06, 0.025, 0.12);
-        vec3 lit = vec3(0.75, 0.32, 0.38);
-        vec3 core = vec3(1.0, 0.62, 0.25);
+        vec3 deep = vec3(0.025, 0.03, 0.08);
+        vec3 lit = vec3(0.24, 0.27, 0.45);
+        vec3 core = vec3(0.7, 0.45, 0.22);
         vec3 col = mix(deep, lit, smoothstep(0.35, 0.8, n));
         col += core * smoothstep(0.45, 0.9, n) * exp(-dist * 0.012) * 1.2;
         float alpha = smoothstep(0.25, 0.6, n) * (1.0 - smoothstep(300.0, 850.0, dist));
@@ -440,7 +449,7 @@ function buildEmbers(rand) {
       void main() {
         float d = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vec3(1.0, 0.62, 0.28) * 2.0, a * vFade);
+        gl_FragColor = vec4(vec3(1.0, 0.75, 0.45) * 1.4, a * vFade * 0.6);
       }`,
   });
   const pts = new THREE.Points(g, mat);

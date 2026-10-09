@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { addRim } from '../fx/outline.js';
 
 // Stylised armoured knight built from primitives. Faces +Z, feet at the origin.
 export function buildPlayerModel() {
-  const armor = new THREE.MeshStandardMaterial({ color: 0x1b2340, metalness: 0.75, roughness: 0.32 });
-  const trim = new THREE.MeshStandardMaterial({ color: 0xc9d6ff, metalness: 0.9, roughness: 0.25 });
+  // Light steel-blue armour with a cyan rim so the hero reads against dark platforms and sky.
+  const armor = addRim(new THREE.MeshStandardMaterial({ color: 0x4a5c8c, metalness: 0.55, roughness: 0.38 }), 0x46e6ff, 0.9, 2.2);
+  const trim = addRim(new THREE.MeshStandardMaterial({ color: 0xe6ecff, metalness: 0.7, roughness: 0.3 }), 0x46e6ff, 0.6, 2.5);
   const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x46e6ff, emissiveIntensity: 2.6 });
 
   const root = new THREE.Group();
@@ -67,6 +69,7 @@ export function buildPlayerModel() {
 
   const materials = [armor, trim, glow];
   let opacity = 1;
+  const api = { outlines: [] };
   const setOpacity = (o) => {
     if (o > 0.98) o = 1;
     if (o === opacity || (o < 1 && Math.abs(o - opacity) < 0.01)) return;
@@ -77,7 +80,8 @@ export function buildPlayerModel() {
       m.opacity = o;
       m.depthWrite = !fade;
     }
+    for (const h of api.outlines) h.visible = o >= 1;
   };
 
-  return { root, body, legL, legR, armL, armR, hand, glow, setOpacity, backSword: sword, handSword };
+  return Object.assign(api, { root, body, legL, legR, armL, armR, hand, glow, setOpacity, backSword: sword, handSword });
 }

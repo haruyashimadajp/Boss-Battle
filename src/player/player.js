@@ -3,6 +3,7 @@ import { PLAYER as P, COMBAT } from '../config.js';
 import { resolve, probeGround, groundHeightBelow } from '../world/collision.js';
 import { buildPlayerModel } from './model.js';
 import { SwordTrail } from '../fx/trail.js';
+import { addOutline } from '../fx/outline.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _wish = new THREE.Vector3();
@@ -38,6 +39,8 @@ export class Player {
     this.model = buildPlayerModel();
     scene.add(this.model.root);
     fx.initAfterimages(this.model.root);
+    // Outline after the afterimage pool is built so ghosts don't copy the hulls.
+    this.model.outlines = addOutline(this.model.root, { color: 0x02020a, thickness: 0.0048 });
     this.trail = new SwordTrail(scene);
 
     this.shadow = new THREE.Mesh(

@@ -156,6 +156,13 @@ Code layout (planned):
 - Overdrive (ultimate) is deferred to the effects/polish steps.
 - Graphics presets: LOW (no post-processing), MEDIUM (bloom, mobile default), HIGH (bloom + shadows)
 
+- **Readability rules** (after playtest feedback):
+  - World is cool and low-saturation (blue-violet night); boss attacks own the warm red/orange range.
+  - Player, platforms and boss get dark outlines; player has a cyan rim light.
+  - Every attack shows its full danger area before it hits: laser = red sweep fan,
+    slam = dark-red zone + pillar + shockwave reach ring, shockwave = visible wall at hit height.
+  - Off-screen threats get red arrows on the screen edge.
+
 ## 9. Open questions
 
 - Art direction: neon-celestial (current) vs. dark fantasy vs. sci-fi mecha

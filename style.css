@@ -469,3 +469,19 @@ body.cinematic #hud, body.cinematic #touch, body.cinematic #btn-menu { opacity: 
   transition: opacity 0.3s;
 }
 body.cinematic.skippable #skip-hint { opacity: 1; }
+
+/* ---------- Off-screen threat arrows ---------- */
+#threats { position: absolute; inset: 0; overflow: hidden; }
+.threat {
+  position: absolute; left: 0; top: 0;
+  width: 0; height: 0;
+  margin: -12px 0 0 -10px;
+  border-left: 22px solid var(--tc, #ff2d55);
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  filter: drop-shadow(0 0 6px var(--tc, #ff2d55)) drop-shadow(0 0 1px #000);
+  will-change: transform;
+}
+.threat.orb { --tc: #ff2d55; }
+.threat.slam { --tc: #ff8a3a; }
+.threat.laser { --tc: #ff3b6b; }

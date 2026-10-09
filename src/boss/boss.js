@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BOSS } from '../config.js';
 import { makeSphere } from '../world/collision.js';
 import { LaserSweep, OrbVolley, WingSlam } from './hazards.js';
+import { addOutline, addRim } from '../fx/outline.js';
 
 // "Seraph of the Broken Sun": a floating core with a halo and four wings.
 // Phase 1 (HALO): laser sweeps, homing orbs and wing slams. Four weak points on the wings.
@@ -58,7 +59,7 @@ export class Boss {
     }
 
     // Wings, each carrying a weak point (also a grapple target).
-    this.wingMat = new THREE.MeshStandardMaterial({ color: 0x1c1830, emissive: 0xff7a2a, emissiveIntensity: 0.35, metalness: 0.7, roughness: 0.3, flatShading: true });
+    this.wingMat = addRim(new THREE.MeshStandardMaterial({ color: 0x2a2440, emissive: 0xff7a2a, emissiveIntensity: 0.3, metalness: 0.7, roughness: 0.3, flatShading: true }), 0xffc061, 0.7, 2.0);
     this.wings = new THREE.Group();
     this.body.add(this.wings);
     this.weakPoints = [];
@@ -81,6 +82,10 @@ export class Boss {
       const anchor = world.addAnchor(this.wings, bx * 0.95, by * 0.95, -2.2, { kind: 'weak', crystal, ring });
       this.weakPoints.push({ id: `weak${i}`, anchor, mat, blade, hp: BOSS.weakHp, alive: true, flash: 0 });
     }
+
+    // Dark silhouettes so the boss reads as a solid shape, not just a glow.
+    addOutline(this.core, { color: 0x1a0800, thickness: 0.003 });
+    addOutline(this.wings, { color: 0x05030a, thickness: 0.0035, filter: (o) => o.material === this.wingMat || o.geometry === wpGeo });
 
     this.light = new THREE.PointLight(0xffa64d, 1600, 0, 2);
     this.body.add(this.light);
@@ -142,6 +147,12 @@ export class Boss {
       if (wp.alive) out.push({ id: wp.id, pos: wp.anchor.pos, r: 1.3, kind: 'weak', ref: wp });
     }
     for (const h of this.hazards) h.targets?.(out);
+    return out;
+  }
+
+  // Incoming attacks, for the off-screen warning arrows: [{ pos, kind }].
+  getThreats(out) {
+    for (const h of this.hazards) h.threats?.(out);
     return out;
   }
 

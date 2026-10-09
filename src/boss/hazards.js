@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BOSS } from '../config.js';
 import { groundHeightBelow } from '../world/collision.js';
+import { addOutline } from '../fx/outline.js';
 
 // Boss attacks. Each hazard is created with a context:
 //   ctx = { scene, fx, world, boss, player, hitPlayer(dmg, from, hazard) -> 'hit'|'perfect'|'ignored',
@@ -156,7 +157,16 @@ export class LaserSweep extends Hazard {
     this.end = new THREE.Vector3();
     this.aim();
 
-    this.aimLine = this.add(new THREE.Mesh(beamGeo, additive(0xff4060, 0.7)));
+    this.aimLine = this.add(new THREE.Mesh(beamGeo, additive(0xff3048, 0.9)));
+    // Danger fan: the whole area the beam will sweep through.
+    const fanSegs = 32;
+    const fanGeo = new THREE.BufferGeometry();
+    fanGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((fanSegs + 2) * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    const idx = [];
+    for (let i = 1; i <= fanSegs; i++) idx.push(0, i, i + 1);
+    fanGeo.setIndex(idx);
+    this.fanSegs = fanSegs;
+    this.fan = this.add(new THREE.Mesh(fanGeo, additive(0xff2038, 0.14, { side: THREE.DoubleSide })));
     this.charge = this.add(new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), additive(0xff6040, 0.8)));
     this.beam = this.add(new THREE.Group());
     this.beamCore = new THREE.Mesh(beamGeo, beamMaterial(0xfff2e0, 2.6, 0.4));
@@ -184,6 +194,21 @@ export class LaserSweep extends Hazard {
   dirAt(yaw, out) {
     const cp = Math.cos(this.pitch);
     return out.set(cp * Math.sin(yaw), Math.sin(this.pitch), cp * Math.cos(yaw));
+  }
+
+  updateFan(fromYaw, toYaw, len = 85) {
+    const pos = this.fan.geometry.attributes.position;
+    pos.setXYZ(0, this.origin.x, this.origin.y, this.origin.z);
+    for (let i = 0; i <= this.fanSegs; i++) {
+      this.dirAt(fromYaw + ((toYaw - fromYaw) * i) / this.fanSegs, _q);
+      pos.setXYZ(i + 1, this.origin.x + _q.x * len, this.origin.y + _q.y * len, this.origin.z + _q.z * len);
+    }
+    pos.needsUpdate = true;
+    this.fan.geometry.computeBoundingSphere();
+  }
+
+  threats(out) {
+    if (this.t < this.telegraph + this.sweep) out.push({ pos: this.origin, kind: 'laser' });
   }
 
   placeBeam(obj, len) {
@@ -216,8 +241,10 @@ export class LaserSweep extends Hazard {
       this.dirAt(this.yaw0 - this.sign * this.arc, this.dir);
       const len = this.measure();
       this.placeBeam(this.aimLine, len);
-      const w = 0.05 + 0.08 * Math.abs(Math.sin(t * 40));
+      const w = 0.16 + 0.12 * Math.abs(Math.sin(t * 30));
       this.aimLine.scale.x = this.aimLine.scale.z = w;
+      this.updateFan(this.yaw0 - this.sign * this.arc, this.yaw0 + this.sign * this.arc);
+      this.fan.material.opacity = 0.08 + 0.1 * Math.abs(Math.sin(t * 12));
       const k = t / this.telegraph;
       this.charge.position.copy(this.origin).addScaledVector(this.dir, 6.5);
       this.charge.scale.setScalar(0.3 + k * 2.2 + Math.sin(t * 50) * 0.15);
@@ -236,7 +263,14 @@ export class LaserSweep extends Hazard {
       }
       const k = Math.min(1, st / this.sweep);
       const e = k * k * (3 - 2 * k);
-      this.dirAt(startYaw + this.sign * this.arc * 2 * e, this.dir);
+      const yaw = startYaw + this.sign * this.arc * 2 * e;
+      this.dirAt(yaw, this.dir);
+      // The fan shrinks to the part still to be swept.
+      this.fan.visible = k < 1;
+      if (k < 1) {
+        this.updateFan(yaw, this.yaw0 + this.sign * this.arc);
+        this.fan.material.opacity = 0.1;
+      }
       const len = this.measure();
       const fade = st > this.sweep ? 1 - (st - this.sweep) / this.tail : 1;
       const flick = 1 + Math.sin(t * 60) * 0.12;
@@ -276,10 +310,12 @@ export class LaserSweep extends Hazard {
 // ---------------------------------------------------------------------------
 // Homing orb volley. Orbs can be slashed to send them back into the core.
 let orbId = 0;
-const orbGeo = new THREE.IcosahedronGeometry(0.7, 2);
-const orbGlowGeo = new THREE.SphereGeometry(1.6, 16, 12);
+const orbGeo = new THREE.IcosahedronGeometry(0.85, 2);
+const orbCoreGeo = new THREE.SphereGeometry(0.42, 12, 8);
+const orbGlowGeo = new THREE.SphereGeometry(1.8, 16, 12);
+const ORB_CORE = new THREE.Color(4, 4, 4);
 // Colour values above 1 so the orbs catch the bloom.
-const ORB_HOT = new THREE.Color(4, 0.7, 1.6);
+const ORB_HOT = new THREE.Color(4, 0.35, 0.5);
 const ORB_REFLECT = new THREE.Color(0.8, 3, 4);
 
 export class OrbVolley extends Hazard {
@@ -302,9 +338,14 @@ export class OrbVolley extends Hazard {
     const pos = new THREE.Vector3(_a.x + Math.cos(ang) * 9, _a.y + Math.sin(ang * 2) * 2.5, _a.z + Math.sin(ang) * 9);
     const mat = new THREE.MeshBasicMaterial({ color: ORB_HOT });
     const mesh = this.add(new THREE.Mesh(orbGeo, mat));
-    const glow = new THREE.Mesh(orbGlowGeo, additive(0xff2d6e, 0.45));
+    const glow = new THREE.Mesh(orbGlowGeo, additive(0xff2038, 0.5));
     glow.frustumCulled = false;
     mesh.add(glow);
+    // White-hot centre + dark outline: readable against both the bright core and the dark sky.
+    const core = new THREE.Mesh(orbCoreGeo, new THREE.MeshBasicMaterial({ color: ORB_CORE, depthTest: false }));
+    core.renderOrder = 3;
+    mesh.add(core);
+    addOutline(mesh, { color: 0x140003, thickness: 0.006, filter: (o) => o === mesh });
     mesh.position.copy(pos);
     mesh.scale.setScalar(0.01);
     this.orbs.push({
@@ -331,6 +372,10 @@ export class OrbVolley extends Hazard {
     o.glow.material.color.set(0x46e6ff);
     o.t = 0;
     this.ctx.fx.ring(o.pos, { color: 0x46e6ff, from: 0.3, to: 3, life: 0.3, normal: this.ctx.camNormal });
+  }
+
+  threats(out) {
+    for (const o of this.orbs) if (o.alive && o.state === 'homing') out.push({ pos: o.pos, kind: 'orb' });
   }
 
   targets(out) {
@@ -412,8 +457,12 @@ export class OrbVolley extends Hazard {
 // Get out of the circle, then jump the ring.
 const slamBladeGeo = new THREE.ConeGeometry(2.4, 22, 4).rotateX(Math.PI).translate(0, 11, 0);
 const discGeo = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2);
-const ringGeo = new THREE.RingGeometry(0.92, 1, 64).rotateX(-Math.PI / 2);
-const waveGeo = new THREE.TorusGeometry(1, 0.035, 8, 80).rotateX(Math.PI / 2);
+const ringGeo = new THREE.RingGeometry(0.86, 1, 64).rotateX(-Math.PI / 2);
+const thinRingGeo = new THREE.RingGeometry(0.985, 1, 96).rotateX(-Math.PI / 2);
+const waveGeo = new THREE.TorusGeometry(1, 0.04, 8, 96).rotateX(Math.PI / 2);
+const WAVE_H = 1.3; // the shockwave hits anything lower than this: jump over the wall
+const waveWallGeo = new THREE.CylinderGeometry(1, 1, WAVE_H, 96, 1, true).translate(0, WAVE_H / 2, 0);
+const pillarGeo = new THREE.CylinderGeometry(1, 1, 40, 16, 1, true).translate(0, 20, 0);
 
 export class WingSlam extends Hazard {
   constructor(ctx) {
@@ -426,17 +475,33 @@ export class WingSlam extends Hazard {
     this.center = new THREE.Vector3();
     this.track();
 
-    this.disc = this.add(new THREE.Mesh(discGeo, additive(0xff2d55, 0.12)));
-    this.fill = this.add(new THREE.Mesh(discGeo, additive(0xff2d55, 0.25)));
-    this.edge = this.add(new THREE.Mesh(ringGeo, additive(0xff4060, 0.9, { side: THREE.DoubleSide })));
+    // Dark red base (normal blending) so the warning reads on bright and dark floors alike.
+    this.disc = this.add(new THREE.Mesh(discGeo, new THREE.MeshBasicMaterial({
+      color: 0x3a0008, transparent: true, opacity: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2,
+    })));
+    this.fill = this.add(new THREE.Mesh(discGeo, additive(0xff2030, 0.35, { polygonOffset: true, polygonOffsetFactor: -3 })));
+    this.edge = this.add(new THREE.Mesh(ringGeo, additive(0xff5060, 1, { side: THREE.DoubleSide })));
+    // How far the shockwave will travel.
+    this.reach = this.add(new THREE.Mesh(thinRingGeo, additive(0xffa060, 0.35, { side: THREE.DoubleSide })));
+    // Tall pillar marking the spot from across the arena.
+    this.pillar = this.add(new THREE.Mesh(pillarGeo, additive(0xff3040, 0.3, { side: THREE.DoubleSide })));
     this.blade = this.add(new THREE.Mesh(slamBladeGeo, new THREE.MeshStandardMaterial({
       color: 0x1c1830, emissive: 0xff5a2a, emissiveIntensity: 1.2, metalness: 0.7, roughness: 0.3, flatShading: true, transparent: true,
     })));
     this.blade.scale.set(1, 1, 0.3);
-    this.wave = this.add(new THREE.Mesh(waveGeo, additive(0xffb070, 1)));
+    this.wave = this.add(new THREE.Group());
+    this.waveWall = new THREE.Mesh(waveWallGeo, additive(0xffa050, 0.55, { side: THREE.DoubleSide }));
+    this.waveRim = new THREE.Mesh(waveGeo, additive(0xffffff, 1));
+    this.waveRim.position.y = WAVE_H;
+    this.wave.add(this.waveWall, this.waveRim);
+    for (const m of this.wave.children) m.frustumCulled = false;
     this.wave.visible = false;
     this.waveHit = false;
     this.place();
+  }
+
+  threats(out) {
+    if (!this.impacted) out.push({ pos: this.center, kind: 'slam' });
   }
 
   track() {
@@ -447,9 +512,12 @@ export class WingSlam extends Hazard {
 
   place() {
     const c = this.center;
-    for (const m of [this.disc, this.fill, this.edge]) m.position.set(c.x, c.y + 0.06, c.z);
+    for (const m of [this.disc, this.fill, this.edge, this.reach]) m.position.set(c.x, c.y + 0.06, c.z);
     this.disc.scale.setScalar(this.radius);
     this.edge.scale.setScalar(this.radius);
+    this.reach.scale.setScalar(this.waveMax);
+    this.pillar.position.set(c.x, c.y, c.z);
+    this.pillar.scale.set(0.6, 1, 0.6);
   }
 
   update(dt) {
@@ -462,7 +530,8 @@ export class WingSlam extends Hazard {
       if (t < this.telegraph * 0.55) { this.track(); this.place(); }
       const k = t / this.telegraph;
       this.fill.scale.setScalar(Math.max(0.01, this.radius * k));
-      this.edge.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(t * 18));
+      this.edge.material.opacity = 0.6 + 0.4 * Math.abs(Math.sin(t * 18));
+      this.pillar.material.opacity = 0.18 + 0.2 * Math.abs(Math.sin(t * 12));
       this.blade.position.set(c.x, c.y + 26 - k * 3, c.z);
       this.blade.rotation.y += dt * 2;
       this.blade.material.emissiveIntensity = 1 + k * 3;
@@ -480,7 +549,7 @@ export class WingSlam extends Hazard {
     if (!this.impacted) {
       this.impacted = true;
       this.blade.position.y = c.y;
-      this.disc.visible = this.fill.visible = this.edge.visible = false;
+      this.disc.visible = this.fill.visible = this.edge.visible = this.pillar.visible = false;
       this.wave.visible = true;
       fx.burst(_a.copy(c).setY(c.y + 0.5), { count: 60, color: 0xffa060, speed: 22, flat: true, life: 0.6, size: 0.6, gravity: 10 });
       fx.burst(_a, { count: 24, color: 0xffffff, speed: 12, life: 0.35, size: 0.5 });
@@ -502,18 +571,21 @@ export class WingSlam extends Hazard {
     if (wt < this.waveTime) {
       const k = wt / this.waveTime;
       const r = this.radius + (this.waveMax - this.radius) * (1 - (1 - k) ** 2);
-      this.wave.position.set(c.x, c.y + 0.5, c.z);
-      this.wave.scale.set(r, 1 + (1 - k) * 18, r);
-      this.wave.material.opacity = 1 - k * 0.8;
+      this.wave.position.set(c.x, c.y, c.z);
+      this.wave.scale.set(r, 1, r);
+      this.waveWall.material.opacity = 0.6 * (1 - k * 0.6);
+      this.waveRim.material.opacity = 1 - k * 0.5;
+      this.reach.material.opacity = 0.35 * (1 - k);
       if (!this.waveHit) {
         const hd = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
         const dy = player.pos.y - c.y;
-        if (Math.abs(hd - r) < 1.0 && dy > -0.5 && dy < 1.3) {
+        if (Math.abs(hd - r) < 1.0 && dy > -0.5 && dy < WAVE_H) {
           if (this.tryHit(BOSS.dmg.shockwave, c, 0.2)) this.waveHit = true;
         }
       }
     } else {
       this.wave.visible = false;
+      this.reach.visible = false;
     }
 
     // The blade lingers, then lifts away and fades.

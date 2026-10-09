@@ -39,6 +39,44 @@ export class HUD {
       return { el, pos: new THREE.Vector3(), t: 0, life: 0.8, alive: false, dx: 0 };
     });
     this.dmgNext = 0;
+
+    this.threatEls = Array.from({ length: 6 }, () => {
+      const el = document.createElement('div');
+      el.className = 'threat';
+      el.hidden = true;
+      document.getElementById('threats').appendChild(el);
+      return el;
+    });
+  }
+
+  // Arrows on the screen edge pointing at attacks you can't see.
+  updateThreats(threats, camera, player, t) {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const list = threats
+      .map((th) => ({ th, d: th.pos.distanceToSquared(player.pos) }))
+      .sort((a, b) => a.d - b.d);
+    let n = 0;
+    for (const { th } of list) {
+      if (n >= this.threatEls.length) break;
+      _v.copy(th.pos).project(camera);
+      let x = _v.x;
+      let y = _v.y;
+      const behind = _v.z > 1;
+      if (!behind && Math.abs(x) < 0.92 && Math.abs(y) < 0.9) continue; // visible on screen
+      if (behind) { x = -x; y = -y; }
+      const a = Math.atan2(y * h, x * w);
+      const rx = w / 2 - 34;
+      const ry = h / 2 - 60; // stay clear of the boss bar
+      const px = w / 2 + Math.cos(a) * rx;
+      const py = h / 2 - Math.sin(a) * ry;
+      const el = this.threatEls[n++];
+      el.hidden = false;
+      el.className = `threat ${th.kind}`;
+      const pulse = 1 + Math.sin(t * 16) * 0.15;
+      el.style.transform = `translate(${px}px, ${py}px) rotate(${-a}rad) scale(${pulse})`;
+    }
+    for (let i = n; i < this.threatEls.length; i++) this.threatEls[i].hidden = true;
   }
 
   makePips(id, n) {

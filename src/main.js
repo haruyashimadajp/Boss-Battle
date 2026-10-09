@@ -481,6 +481,7 @@ function step(rawDt) {
   fx.update(dt);
   post.update(rawDt, game.time);
   hud.update(rawDt, player, camera, boss);
+  hud.updateThreats(playing && !fight.cine ? boss.getThreats([]) : [], camera, player, game.time);
   input.endFrame();
 }
 
