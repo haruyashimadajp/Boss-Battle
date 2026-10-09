@@ -657,7 +657,7 @@ export class Player {
     m.root.visible = this.hurtT <= 0 || Math.floor(this.hurtT * 18) % 2 === 0;
 
     // Glow pulses while invulnerable.
-    m.glow.emissiveIntensity = this.iframes > 0 ? 6 : this.grappling ? 4 : 2.6;
+    m.glow.emissiveIntensity = this.iframes > 0 ? 4 : this.grappling ? 2.8 : 1.8;
 
     // Drop shadow marker: always shows where you will land.
     const gy = groundHeightBelow(this.pos.x, this.pos.y, this.pos.z, this.world.colliders);

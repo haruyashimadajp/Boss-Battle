@@ -6,7 +6,7 @@ export function buildPlayerModel() {
   // Light steel-blue armour with a cyan rim so the hero reads against dark platforms and sky.
   const armor = addRim(new THREE.MeshStandardMaterial({ color: 0x4a5c8c, metalness: 0.55, roughness: 0.38 }), 0x46e6ff, 0.9, 2.2);
   const trim = addRim(new THREE.MeshStandardMaterial({ color: 0xe6ecff, metalness: 0.7, roughness: 0.3 }), 0x46e6ff, 0.6, 2.5);
-  const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x46e6ff, emissiveIntensity: 2.6 });
+  const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0x46e6ff, emissiveIntensity: 1.8 });
 
   const root = new THREE.Group();
   const body = new THREE.Group();

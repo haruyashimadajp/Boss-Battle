@@ -13,6 +13,49 @@ const TAU = Math.PI * 2;
 const WHITE = new THREE.Color(0xffffff);
 const _v = new THREE.Vector3();
 
+// "Eclipse" core: a dark sphere with a bright corona rim and slowly drifting glowing cracks.
+// Reads as a solid shape instead of a white bloom blob. uHeat brightens it (broken / cleared).
+function makeCoreMaterial() {
+  const m = new THREE.MeshStandardMaterial({ color: 0x1c120c, metalness: 0.5, roughness: 0.4, emissive: 0xffa53a, emissiveIntensity: 1 });
+  const uniforms = {
+    uTime: { value: 0 },
+    uHeat: { value: 0 },
+    uFlash: { value: 0 },
+    uRim: { value: new THREE.Color(1.0, 0.62, 0.24) },
+  };
+  m.userData.uniforms = uniforms;
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime;
+        uniform float uHeat;
+        uniform float uFlash;
+        uniform vec3 uRim;
+        varying vec3 vObjPos;
+        float h3(vec3 p) { return fract(sin(dot(p, vec3(17.1, 31.7, 11.3))) * 43758.5453); }
+        float n3(vec3 p) {
+          vec3 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), f.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), f.x), f.y),
+                     mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), f.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+        }`)
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        vec3 sp = normalize(vObjPos) * 2.4;
+        float n = n3(sp + vec3(0.0, uTime * 0.12, 0.0)) * 0.6 + n3(sp * 2.3 - vec3(uTime * 0.08)) * 0.4;
+        float crack = 1.0 - smoothstep(0.0, 0.05 + uHeat * 0.05, abs(n - 0.5));
+        float rim = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 2.4);
+        totalEmissiveRadiance = emissive * (crack * (0.9 + uHeat * 1.2) + uHeat * 0.35)
+          + uRim * rim * (1.3 + uHeat)
+          + vec3(1.0, 0.95, 0.85) * uFlash * 0.7;`);
+  };
+  m.customProgramCacheKey = () => 'eclipse-core';
+  return m;
+}
+
 export class Boss {
   constructor(scene, world, fx, events) {
     this.scene = scene;
@@ -32,8 +75,7 @@ export class Boss {
     this.body = new THREE.Group(); // turns to face the player
     this.root.add(this.body);
 
-    this.coreColor = new THREE.Color(0xffa53a);
-    this.coreMat = new THREE.MeshStandardMaterial({ color: 0x3a1a00, emissive: this.coreColor.clone(), emissiveIntensity: 2.0 });
+    this.coreMat = makeCoreMaterial();
     this.core = new THREE.Mesh(new THREE.IcosahedronGeometry(BOSS.coreRadius, 3), this.coreMat);
     this.body.add(this.core);
     world.solids.push(this.core);
@@ -42,7 +84,7 @@ export class Boss {
 
     this.shell = new THREE.Mesh(
       new THREE.IcosahedronGeometry(7.2, 1),
-      new THREE.MeshBasicMaterial({ color: 0xffd38a, wireframe: true, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ color: 0xffd38a, wireframe: true, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     this.body.add(this.shell);
 
@@ -52,7 +94,7 @@ export class Boss {
     this.halo = new THREE.Group();
     haloTilt.add(this.halo);
     const haloGeo = new THREE.TorusGeometry(12.5, 0.38, 10, 120).rotateX(Math.PI / 2);
-    this.halo.add(new THREE.Mesh(haloGeo, new THREE.MeshStandardMaterial({ color: 0x3a2400, emissive: 0xffc061, emissiveIntensity: 3 })));
+    this.halo.add(new THREE.Mesh(haloGeo, new THREE.MeshStandardMaterial({ color: 0x3a2400, emissive: 0xffc061, emissiveIntensity: 1.2 })));
     for (let i = 0; i < 4; i++) {
       const a = (i / 4) * TAU + Math.PI / 4;
       world.addAnchor(this.halo, Math.sin(a) * 12.5, 1.6, Math.cos(a) * 12.5);
@@ -76,7 +118,7 @@ export class Boss {
       blade.rotation.z = side * (upper ? -1.0 : -2.3);
       this.wings.add(blade);
 
-      const mat = new THREE.MeshStandardMaterial({ color: 0x400010, emissive: 0xff3d6e, emissiveIntensity: 3 });
+      const mat = new THREE.MeshStandardMaterial({ color: 0x400010, emissive: 0xff3d6e, emissiveIntensity: 1.5 });
       const crystal = new THREE.Mesh(wpGeo, mat);
       const ring = new THREE.Mesh(wpRingGeo, new THREE.MeshBasicMaterial({ color: 0xff8fb0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
       const anchor = world.addAnchor(this.wings, bx * 0.95, by * 0.95, -2.2, { kind: 'weak', crystal, ring });
@@ -90,13 +132,6 @@ export class Boss {
     this.light = new THREE.PointLight(0xffa64d, 1600, 0, 2);
     this.body.add(this.light);
 
-    // Pillar of light from the core down to the center platform.
-    this.beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(2.2, 3.5, 26, 24, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-    );
-    this.beam.position.set(0, 16, 0);
-    scene.add(this.beam);
   }
 
   reset() {
@@ -112,7 +147,6 @@ export class Boss {
     this.y = BOSS.hoverY;
     this.yaw = 0;
     this.shell.visible = true;
-    this.beam.visible = true;
     for (const wp of this.weakPoints) {
       wp.hp = BOSS.weakHp;
       wp.alive = true;
@@ -220,7 +254,6 @@ export class Boss {
     this.state = 'broken';
     this.stateT = 0;
     this.shell.visible = false;
-    this.beam.visible = false;
     this.events.onBreak();
   }
 
@@ -302,7 +335,6 @@ export class Boss {
         if (this.stateT > 1.5) {
           this.state = 'idle';
           this.idleT = 0.8;
-          this.beam.visible = true;
         }
         break;
       default:
@@ -335,16 +367,19 @@ export class Boss {
 
     // ---- Glow / flash ----
     this.flash = Math.max(0, this.flash - dt * 8);
-    let glow = 1.5 + Math.sin(t * 2.2) * 0.2;
-    if (this.state === 'broken') glow = 3.2 + Math.sin(t * 14) * 0.8;
-    if (this.state === 'attack' && this.stateT < 1) glow += this.stateT * 1.5;
-    this.coreMat.emissive.copy(this.coreColor).lerp(WHITE, this.state === 'broken' ? 0.45 : 0);
-    this.coreMat.emissive.lerp(WHITE, this.flash * 0.8);
-    this.coreMat.emissiveIntensity = glow + this.flash * 3;
+    let heat = 0;
+    if (this.state === 'broken') heat = 1 + Math.sin(t * 14) * 0.25;
+    else if (this.state === 'cleared') heat = 1.6;
+    else if (this.state === 'attack' && this.stateT < 1) heat = this.stateT * 0.5; // wind-up glow
+    const cu = this.coreMat.userData.uniforms;
+    cu.uTime.value = t;
+    cu.uHeat.value += (heat - cu.uHeat.value) * Math.min(1, dt * 8);
+    cu.uFlash.value = this.flash;
+    this.coreMat.emissiveIntensity = 1 + Math.sin(t * 2.2) * 0.12;
     for (const wp of this.weakPoints) {
       wp.flash = Math.max(0, wp.flash - dt * 8);
       wp.mat.emissive.setHex(0xff3d6e).lerp(WHITE, wp.flash);
-      wp.mat.emissiveIntensity = 3 + Math.sin(t * 6) * 0.8 + wp.flash * 4;
+      wp.mat.emissiveIntensity = 1.5 + Math.sin(t * 6) * 0.4 + wp.flash * 3;
     }
   }
 }

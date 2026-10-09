@@ -47,11 +47,11 @@ function jitterGeometry(geo, amount, keepTopY = Infinity) {
 const MAT = {
   rock: new THREE.MeshStandardMaterial({ color: 0x2a2638, roughness: 0.92, metalness: 0.05, flatShading: true }),
   slab: new THREE.MeshStandardMaterial({ color: 0x6c6a8c, roughness: 0.75, metalness: 0.15, flatShading: true }),
-  rune: new THREE.MeshStandardMaterial({ color: 0x0a2a33, emissive: 0x3fd8ff, emissiveIntensity: 1.6 }),
+  rune: new THREE.MeshStandardMaterial({ color: 0x0a2a33, emissive: 0x3fd8ff, emissiveIntensity: 0.9 }),
   pillar: new THREE.MeshStandardMaterial({ color: 0x3b3554, roughness: 0.6, metalness: 0.3, flatShading: true }),
-  pillarBand: new THREE.MeshStandardMaterial({ color: 0x220b12, emissive: 0xff9a3c, emissiveIntensity: 2.2 }),
-  crystal: new THREE.MeshStandardMaterial({ color: 0x2a0f40, emissive: 0xb77dff, emissiveIntensity: 2.4, flatShading: true }),
-  crystalRing: new THREE.MeshBasicMaterial({ color: 0xd9b8ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }),
+  pillarBand: new THREE.MeshStandardMaterial({ color: 0x220b12, emissive: 0xff9a3c, emissiveIntensity: 1.2 }),
+  crystal: new THREE.MeshStandardMaterial({ color: 0x2a0f40, emissive: 0xb77dff, emissiveIntensity: 1.3, flatShading: true }),
+  crystalRing: new THREE.MeshBasicMaterial({ color: 0xd9b8ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
 };
 // Cool rim light so platform silhouettes separate from the sky.
 addRim(MAT.slab, 0x8fb8ff, 0.12, 3.0); // weak: platform tops are seen at grazing angles

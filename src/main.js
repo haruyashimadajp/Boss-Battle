@@ -464,10 +464,10 @@ function step(rawDt) {
   // Screen effects: grade, god rays from the core, speed blur.
   boss.getCorePos(_core);
   let grade = 'phase1';
-  let rays = 0.35;
-  if (game.state === 'title') { grade = 'title'; rays = 0.5; }
-  else if (fight.ending) { grade = fight.ending.win ? 'clear' : 'dead'; rays = fight.ending.win ? 0.8 : 0.15; }
-  else if (boss.broken) { grade = 'break'; rays = 0.5; }
+  let rays = 0.18;
+  if (game.state === 'title') { grade = 'title'; rays = 0.3; }
+  else if (fight.ending) { grade = fight.ending.win ? 'clear' : 'dead'; rays = fight.ending.win ? 0.5 : 0.1; }
+  else if (boss.broken) { grade = 'break'; rays = 0.3; }
   post.setGrade(grade);
   post.setGodRays(_core, rays);
   let speed = 0;

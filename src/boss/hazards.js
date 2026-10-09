@@ -313,9 +313,9 @@ let orbId = 0;
 const orbGeo = new THREE.IcosahedronGeometry(0.85, 2);
 const orbCoreGeo = new THREE.SphereGeometry(0.42, 12, 8);
 const orbGlowGeo = new THREE.SphereGeometry(1.8, 16, 12);
-const ORB_CORE = new THREE.Color(4, 4, 4);
+const ORB_CORE = new THREE.Color(2.5, 2.5, 2.5);
 // Colour values above 1 so the orbs catch the bloom.
-const ORB_HOT = new THREE.Color(4, 0.35, 0.5);
+const ORB_HOT = new THREE.Color(2.6, 0.25, 0.35);
 const ORB_REFLECT = new THREE.Color(0.8, 3, 4);
 
 export class OrbVolley extends Hazard {

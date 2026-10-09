@@ -145,7 +145,7 @@ export class Post {
     this.world = world;
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.35, 0.88);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.3, 0.92);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     // After OutputPass so it works on display colours.
