@@ -16,6 +16,14 @@ ES modules need an HTTP server (opening `index.html` via `file://` will not work
 Then open http://localhost:8000. To play on a phone, host it on GitHub Pages
 (Settings → Pages → deploy from branch) or open your PC's LAN address from the phone.
 
+## Single-file build (claude.ai Artifact)
+
+    node tools/build-artifact.mjs
+
+Bundles everything into `dist/aether-breaker.html` (Three.js still loads from the CDN).
+That one file is what gets published as the playable Artifact, and it also runs when
+opened straight from disk.
+
 ## Controls
 
 Switch between PC and mobile in **Settings → Controls** (AUTO / PC / MOBILE).
