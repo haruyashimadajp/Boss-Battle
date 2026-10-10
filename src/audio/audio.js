@@ -328,6 +328,26 @@ const SFX = {
     for (const f of [48, 49.3, 97]) tone(e, lp, { type: 'sawtooth', f, vol: 0.3, a: 0.03, sustain: true });
     hiss(e, o, { f: 900, q: 0.5, vol: 0.35, a: 0.03, sustain: true });
   } },
+  // Phase 3 ultimate: the knockback blast, the descending light pillars and the nova rings.
+  novaCharge: { gap: 0.5, verb: 0.5, play(e, o) {
+    tone(e, o, { f: 180, f2: 1400, dur: 0.75, vol: 0.12, a: 0.05 });
+    hiss(e, o, { f: 400, f2: 6000, dur: 0.75, vol: 0.25, a: 0.6 });
+    for (const f of [523.3, 622.3, 784]) tone(e, o, { type: 'triangle', f, dur: 0.9, vol: 0.04, a: 0.4 });
+  } },
+  novaBlast: { gap: 0.5, verb: 0.7, play(e, o) {
+    boom(e, o, { f: 90, f2: 20, dur: 1.6, vol: 1 });
+    hiss(e, o, { f: 7000, f2: 300, q: 0.4, dur: 1.1, vol: 0.55 });
+    for (const f of [261.6, 311.1, 392, 523.3]) tone(e, o, { type: 'sawtooth', f, f2: f * 0.5, dur: 1.4, vol: 0.035 });
+  } },
+  judgement: { gain: 1.4, gap: 0.04, verb: 0.3, play(e, o) {
+    tone(e, o, { type: 'triangle', f: rnd(1400, 1900), f2: 300, dur: 0.35, vol: 0.06 });
+    boom(e, o, { f: 140, f2: 40, dur: 0.35, vol: 0.5 });
+    hiss(e, o, { f: 5000, f2: 800, q: 0.8, dur: 0.3, vol: 0.25 });
+  } },
+  novaRing: { gap: 0.2, verb: 0.4, play(e, o) {
+    hiss(e, o, { f: 6000, f2: 500, q: 0.7, dur: 0.9, vol: 0.45 });
+    tone(e, o, { f: 900, f2: 120, dur: 0.8, vol: 0.12 });
+  } },
 };
 
 class SoundEngine {

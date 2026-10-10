@@ -2,14 +2,16 @@ import * as THREE from 'three';
 import { BOSS } from '../config.js';
 import { makeSphere } from '../world/collision.js';
 import { LaserSweep, OrbVolley, WingSlam } from './hazards.js';
-import { HaloBlades, SpiralBarrage, GravityWell, LanceDash, MeteorRain, AnnihilationBeam } from './hazards2.js';
+import { HaloBlades, SpiralBarrage, GravityWell, LanceDash, MeteorRain, AnnihilationBeam, Judgement } from './hazards2.js';
 import { buildAngel } from './angel.js';
 import { addOutline, addRim } from '../fx/outline.js';
+import { audio } from '../audio/audio.js';
 
 // The boss fight in three phases.
 //   Phase 1 HALO      "Seraph of the Broken Sun": floating core, halo, four wings with weak points.
 //   Phase 2 ECLIPSE   the core hatches Seraphina, an angel girl. Wing jewels are the weak points.
 //   Phase 3 SUPERNOVA Seraphina turns crimson; her heart jewel is the weak point.
+//                     Every quarter of its HP she blasts the player away and casts Judgement.
 //   At 0 HP she waits for the finisher, then dissolves into light.
 //
 // events: onBreak(), onBreakEnd(), onWeakDestroyed(wp), onPhaseEnd(phase), onTransformFlash(phase),
@@ -197,7 +199,7 @@ export class Boss {
     this.phase = phase;
     this.hp = this.phaseStartHp(phase);
     this.breakGauge = 0;
-    this.state = 'dormant'; // dormant | intro | idle | attack | broken | recover | transform | finisher | dying | dead
+    this.state = 'dormant'; // dormant | intro | idle | attack | broken | recover | nova | transform | finisher | dying | dead
     this.stateT = 0;
     this.idleT = 2;
     this.lastAttack = null;
@@ -206,6 +208,7 @@ export class Boss {
     this.y = BOSS.hoverY;
     this.yaw = 0;
     this.dissolve = 0;
+    this.resetNova();
     this.shell.visible = true;
     this.root.visible = phase === 1;
     this.root.scale.setScalar(1);
@@ -305,6 +308,11 @@ export class Boss {
 
     this.hp = Math.max(this.phaseEndHp, this.hp - amount);
     this.flash = 1;
+    if (this.phase === 3 && this.novaAt > 0 && this.hp <= this.novaAt && this.hp > 0) {
+      // Several thresholds crossed at once (e.g. during a break) still give one blast.
+      this.novaPending = true;
+      this.novaAt = this.nextNovaHp(this.hp);
+    }
     if (!this.broken) {
       this.breakGauge = Math.min(1, this.breakGauge + breakGain);
       if (this.breakGauge >= 1) this.enterBreak();
@@ -365,6 +373,59 @@ export class Boss {
       this.angel.setPose('dizzy');
       this.events.onFinisherReady();
     }
+  }
+
+  // ---------- Phase 3 knockback + Judgement ----------
+  resetNova() {
+    this.novaCount = 0;
+    this.novaPending = false;
+    this.novaAt = this.phase === 3 ? this.nextNovaHp(this.hp) : -1;
+  }
+
+  // Next HP threshold below `hp` (every novaEvery of Phase 3's HP), or -1 if none is left.
+  nextNovaHp(hp) {
+    const start = this.phaseStartHp(3);
+    const step = start * BOSS.novaEvery;
+    const k = Math.floor((start - hp) / step + 1e-6) + 1;
+    const at = start - k * step;
+    return at > 1 ? at : -1;
+  }
+
+  beginNova() {
+    this.cancelHazards();
+    this.novaPending = false;
+    this.novaCount++;
+    this.state = 'nova';
+    this.stateT = 0;
+    this.blasted = false;
+    this.angel.setMood('angry');
+    this.angel.setPose('charge');
+    this.ctx?.banner?.('JUDGEMENT', 'bad', 1.8);
+    audio.play('novaCharge', { pos: this.getCorePos(_v) });
+  }
+
+  // The blast: throws the player away from her (no damage) and starts Judgement.
+  novaBlast() {
+    this.blasted = true;
+    const c = this.getCorePos(_v);
+    const K = BOSS.novaKnock;
+    const player = this.ctx?.player;
+    if (player) {
+      const d = player.pos.distanceTo(c);
+      const speed = K.minSpeed + (K.speed - K.minSpeed) * Math.max(0, 1 - Math.max(0, d - 12) / K.falloff);
+      this.ctx.knockPlayer?.(c, { speed, up: K.up, stun: K.stun });
+    }
+    this.fx.ring(c, { color: 0xffc0d0, from: 2, to: 40, life: 0.7, normal: this.ctx?.camNormal });
+    this.fx.ring(c, { color: 0xff3a5a, from: 1, to: 28, life: 0.9, normal: this.ctx?.camNormal });
+    this.fx.shards(c, { glow: true, count: 90, color: new THREE.Color(3, 0.6, 0.9), speed: 34, size: 1, life: 1.4, gravity: 2, up: 0 });
+    this.fx.burst(c, { count: 80, color: 0xffd0dc, speed: 40, life: 0.6, size: 0.7 });
+    this.ctx?.shockwave?.(c, { strength: 2.4, speed: 0.55, life: 1.1 });
+    this.ctx?.shake?.(0.8);
+    this.ctx?.flash?.('#ffd0dc', 0.35);
+    audio.play('novaBlast', { pos: c });
+    this.hazards.push(new Judgement(this.ctx, { level: Math.min(3, this.novaCount) }));
+    this.state = 'attack';
+    this.stateT = 0;
   }
 
   // The finisher connected: dissolve into light.
@@ -460,7 +521,7 @@ export class Boss {
     const p = this.ctx.player.pos;
     const pa = Math.atan2(p.x, p.z);
     const a = pa + (Math.random() - 0.5) * 2.2;
-    const r = this.phase === 3 ? 10 + Math.random() * 12 : 15 + Math.random() * 9;
+    const r = this.phase === 3 ? 13 + Math.random() * 17 : 19 + Math.random() * 13;
     const y = this.phase === 3 ? 11 + Math.random() * 7 : 14 + Math.random() * 6;
     this.home.set(Math.sin(a) * r, y, Math.cos(a) * r);
   }
@@ -470,6 +531,9 @@ export class Boss {
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       if (!this.hazards[i].update(dt)) this.hazards.splice(i, 1);
     }
+    // A pending blast cuts into her current attack, but never into Judgement itself.
+    if (this.novaPending && (['idle', 'recover'].includes(this.state)
+        || (this.state === 'attack' && !this.hazards.some((h) => h instanceof Judgement)))) this.beginNova();
 
     switch (this.state) {
       case 'intro':
@@ -513,6 +577,12 @@ export class Boss {
           this.state = 'idle';
           this.idleT = 0.8;
         }
+        break;
+      case 'nova':
+        if (Math.random() < 0.8) this.fx.converge(this.getCorePos(_v), { count: 5, radius: 12, color: 0xff6a8a, life: 0.45, size: 0.8 });
+        this.angelPos.x += (Math.random() - 0.5) * 0.25;
+        this.angelPos.z += (Math.random() - 0.5) * 0.25;
+        if (this.stateT > BOSS.novaWindup && !this.blasted) this.novaBlast();
         break;
       case 'transform':
         this.updateTransform(dt, t);
@@ -610,6 +680,7 @@ export class Boss {
   }
 
   finishTransform() {
+    if (this.phase === 3) this.resetNova();
     this.state = 'idle';
     this.idleT = 1.0;
     this.stateT = 0;
@@ -662,7 +733,7 @@ export class Boss {
       // Drift down, dazed, within reach.
       _w.set(this.angelPos.x, Math.max(9, this.angelPos.y - 1), this.angelPos.z);
       const h = Math.hypot(_w.x, _w.z);
-      if (h > 20) { _w.x *= 20 / h; _w.z *= 20 / h; }
+      if (h > 28) { _w.x *= 28 / h; _w.z *= 28 / h; }
       this.angelPos.lerp(_w, Math.min(1, dt * 1.5));
     } else if (!lanceActive && this.state !== 'transform') {
       this.angelPos.lerp(this.home, Math.min(1, dt * 1.6));

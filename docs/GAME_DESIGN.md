@@ -45,7 +45,9 @@ A floating mechanical angel ~40 m tall: halo ring, 4 wings with glowing cores,
 a central sun-core. Built entirely from procedural geometry + emissive shaders.
 
 ### Phase 1 — HALO (100–60 %)
-Arena: ring of floating rock platforms around the boss.
+Arena: rings of wide floating rock platforms around the boss, about 125 m across: start
+platform (9.5 m radius), center platform (13 m), inner ring at 30 m (5.5 m platforms),
+outer ring at 54 m (7–9 m platforms) with stepping stones, and high perches reached by grappling.
 - Laser sweep: horizontal beam, jump/dash over
 - Homing orb volley: 12 slow orbs, dash to dodge or slash to reflect
 - Wing slam: hits a platform, shockwave ring + platform cracks
@@ -68,6 +70,12 @@ Crimson wings, red eyes, angry face; sky turns crimson, arena orbits faster, sho
 - Meteor rain with ground markers (half of them around you)
 - Annihilation beam: long charge, red cylinder shows the line; platforms and pillars block it
 - Faster blades / spiral / lance; frequent combos, near-constant below 10 %
+- Judgement (ultimate): each time she loses a quarter of this phase's HP (3 times), she glows
+  for 0.7 s (untouchable), then blasts you away from her without damage (stronger the closer you
+  are; jumps, dashes and grapple are refilled so you can recover). She rises over the center under
+  a huge sigil, then pillars of light strike marked circles across the arena (half around you),
+  and 1–3 nova rings sweep outward at your feet's height: jump over them or dash through.
+  Each cast adds pillars and one more ring. Thresholds crossed during a break give one blast after it.
 - Weak point: heart jewel on her chest
 - Finisher: at 0 HP she is dazed → "FINISH IT" → press attack → slow-motion dive into her heart,
   white flash, she smiles and dissolves into light → VICTORY + rank

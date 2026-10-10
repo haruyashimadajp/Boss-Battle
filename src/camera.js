@@ -110,7 +110,7 @@ export class CameraRig {
   // Slow cinematic orbit used behind the title screen.
   updateTitle(dt, t) {
     const a = t * 0.06;
-    this.camera.position.set(Math.sin(a) * 72, 26 + Math.sin(t * 0.2) * 4, Math.cos(a) * 72);
+    this.camera.position.set(Math.sin(a) * 92, 30 + Math.sin(t * 0.2) * 4, Math.cos(a) * 92);
     this.camera.lookAt(0, 22, 0);
     if (this.camera.fov !== C.fov) {
       this.camera.fov = C.fov;

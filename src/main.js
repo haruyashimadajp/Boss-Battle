@@ -297,6 +297,13 @@ boss.ctx = {
   banner: (text, cls, d) => hud.banner(text, cls, d),
   flash: (c, a) => hud.flash(c, a),
   impactFlash: (dist) => { if (dist < 25) hud.flash('#ffd8a0', 0.25); },
+  // Phase 3 blast: thrown away from her, no damage.
+  knockPlayer: (from, o) => {
+    if (game.state !== 'playing' || fight.ending || fight.cine || fight.finisher || player.dead) return;
+    player.knockback(from, o);
+    hitstop(0.1);
+    fx.burst(player.center, { count: 24, color: 0xffd0dc, speed: 10, life: 0.4, size: 0.4 });
+  },
   onReflectHit: () => {
     const res = boss.takeHit('reflect', BOSS.reflectDmg);
     if (!res) return;

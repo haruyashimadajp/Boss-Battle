@@ -29,7 +29,7 @@ export const PLAYER = {
   dashCooldown: 0.1,
   dashGroundRecharge: 0.35,
 
-  grappleRange: 55,
+  grappleRange: 68,
   grappleConeDeg: 20,
   grappleConeDegTouch: 32,
   grappleFireTime: 0.09,
@@ -93,6 +93,11 @@ export const BOSS = {
   perfectSlowmo: 1.5, // seconds of slowed boss time after a perfect dodge
   perfectScale: 0.25,
   dmg: { laser: 2, orb: 1, slam: 2, shockwave: 1 },
+  // Phase 3: every time she loses this fraction of the phase's HP she blasts the player away
+  // and casts Judgement, her ultimate. With 0.25 that is three times before the finisher.
+  novaEvery: 0.25,
+  novaWindup: 0.7, // seconds she glows (untouchable) before the blast
+  novaKnock: { speed: 26, minSpeed: 9, falloff: 50, up: 15, stun: 0.45 }, // weaker the farther you are
 };
 
 export const CAMERA = {

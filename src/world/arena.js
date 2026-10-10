@@ -68,7 +68,7 @@ export function buildWorld(scene) {
     phase: 1,
     orbitSpeed: 0, // whole-arena rotation speed (rad/s), raised in Phases 2-3
     orbitAngle: 0,
-    spawn: new THREE.Vector3(0, 0, 42),
+    spawn: new THREE.Vector3(0, 0, 57),
     spawnCollider: null,
     lights: {},
     update: null,
@@ -91,7 +91,7 @@ export function buildWorld(scene) {
   moon.position.set(-30, 60, 20);
   moon.shadow.mapSize.set(1024, 1024);
   const sc = moon.shadow.camera;
-  sc.left = -16; sc.right = 16; sc.top = 16; sc.bottom = -16; sc.near = 1; sc.far = 120;
+  sc.left = -20; sc.right = 20; sc.top = 20; sc.bottom = -20; sc.near = 1; sc.far = 120;
   moon.shadow.bias = -0.0008;
   moon.shadow.normalBias = 0.03;
   scene.add(hemi, moon, moon.target);
@@ -160,18 +160,18 @@ export function buildWorld(scene) {
   const polar = (R, a) => [R * Math.sin(a), R * Math.cos(a)];
 
   // Start platform (south side, facing the boss).
-  const start = platform(0, 0, 42, 7);
+  const start = platform(0, 0, 57, 9.5);
   world.spawnCollider = start.cols[0];
 
   // Center platform beneath the boss (crumbles when Phase 2 begins).
-  world.center = platform(0, 3, 0, 9);
+  world.center = platform(0, 3, 0, 13);
 
   // Outer ring.
   const outerH = [0, 2, 5, 1, 7, 3, 9, 4, 6, 2];
   for (let i = 1; i < 10; i++) {
     const a = (i / 10) * TAU;
-    const [x, z] = polar(40, a);
-    const r = 4.5 + rand() * 1.5;
+    const [x, z] = polar(54, a);
+    const r = 7 + rand() * 2;
     const p = platform(x, outerH[i], z, r);
     if (i % 3 === 0) {
       const [ox, oz] = polar(r * 0.45, a + 1.2);
@@ -182,28 +182,28 @@ export function buildWorld(scene) {
   // Stepping stones between outer platforms.
   for (let i = 0; i < 10; i += 2) {
     const a = ((i + 0.5) / 10) * TAU;
-    const [x, z] = polar(40, a);
-    platform(x, (outerH[i] + outerH[(i + 1) % 10]) / 2 + 2.5, z, 1.7);
+    const [x, z] = polar(54, a);
+    platform(x, (outerH[i] + outerH[(i + 1) % 10]) / 2 + 2.5, z, 3);
   }
 
   // Inward stepping stone from the start platform.
-  platform(0, 3, 31, 2.5);
+  platform(0, 3, 43, 4);
 
   // Inner ring: two of them move.
   const innerH = [6, 10, 8, 12, 9, 11];
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * TAU;
-    const [x, z] = polar(22, a);
+    const [x, z] = polar(30, a);
     let motion = null;
     if (i === 1) motion = { type: 'bob', amp: 3, speed: 0.9 };
-    if (i === 4) motion = { type: 'orbit', radius: 22, angle: a, speed: 0.12, y: innerH[i] };
-    platform(x, innerH[i], z, 3.5, { motion }).dir = -1;
+    if (i === 4) motion = { type: 'orbit', radius: 30, angle: a, speed: 0.1, y: innerH[i] };
+    platform(x, innerH[i], z, 5.5, { motion }).dir = -1;
   }
 
   // High perches, reached by grappling.
   for (const deg of [30, 150, 270]) {
-    const [x, z] = polar(33, (deg * Math.PI) / 180);
-    platform(x, 22, z, 4).dir = -1;
+    const [x, z] = polar(40, (deg * Math.PI) / 180);
+    platform(x, 22, z, 5.5).dir = -1;
   }
 
   // ---------- Grapple anchors ----------
@@ -226,14 +226,14 @@ export function buildWorld(scene) {
   world.addAnchor = anchor;
 
   for (let i = 0; i < 6; i++) {
-    const [x, z] = polar(28, ((i + 0.5) / 6) * TAU);
+    const [x, z] = polar(38, ((i + 0.5) / 6) * TAU);
     anchor(scene, x, 20, z);
   }
   for (const deg of [0, 120, 240]) {
-    const [x, z] = polar(36, (deg * Math.PI) / 180);
+    const [x, z] = polar(48, (deg * Math.PI) / 180);
     anchor(scene, x, 31, z);
   }
-  anchor(scene, 0, 12, 36);
+  anchor(scene, 0, 12, 49);
 
   // ---------- Floating debris ----------
   const debrisCount = 70;
@@ -241,7 +241,7 @@ export function buildWorld(scene) {
   const debrisData = [];
   for (let i = 0; i < debrisCount; i++) {
     const a = rand() * TAU;
-    const R = 75 + rand() * 70;
+    const R = 100 + rand() * 80;
     debrisData.push({
       x: Math.sin(a) * R,
       y: -25 + rand() * 75,
@@ -476,7 +476,7 @@ function buildEmbers(rand) {
   const seed = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const a = rand() * TAU;
-    const R = Math.sqrt(rand()) * 90;
+    const R = Math.sqrt(rand()) * 115;
     pos.set([Math.sin(a) * R, rand() * 90 - 30, Math.cos(a) * R], i * 3);
     seed[i] = rand();
   }

@@ -208,7 +208,7 @@ export class LaserSweep extends Hazard {
     return out.set(cp * Math.sin(yaw), Math.sin(this.pitch), cp * Math.cos(yaw));
   }
 
-  updateFan(fromYaw, toYaw, len = 85) {
+  updateFan(fromYaw, toYaw, len = 110) {
     const pos = this.fan.geometry.attributes.position;
     pos.setXYZ(0, this.origin.x, this.origin.y, this.origin.z);
     for (let i = 0; i <= this.fanSegs; i++) {
@@ -232,12 +232,12 @@ export class LaserSweep extends Hazard {
   // March along the beam until it hits a platform.
   measure() {
     const cols = this.ctx.world.colliders;
-    for (let d = 7; d < 120; d += 1.5) {
+    for (let d = 7; d < 150; d += 1.5) {
       this.end.copy(this.origin).addScaledVector(this.dir, d);
       this.hitCol = pointInPlatform(this.end, cols);
       if (this.hitCol) return d;
     }
-    return 120;
+    return 150;
   }
 
   update(dt) {
@@ -299,7 +299,7 @@ export class LaserSweep extends Hazard {
       this.charge.position.copy(this.origin).addScaledVector(this.dir, 6.5);
       this.charge.scale.setScalar(2.6 * fade * flick);
 
-      if (len < 120) {
+      if (len < 150) {
         fx.burst(this.end, { count: 4, color: 0xffa060, speed: 14, life: 0.4, size: 0.45, gravity: 20 });
         // Burn a glowing trail across the platform tops.
         const c = this.hitCol;

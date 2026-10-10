@@ -501,6 +501,26 @@ export class Player {
     return 'hit';
   }
 
+  // Thrown away from `from` without damage (Phase 3 blast). Jumps, dashes and the grapple
+  // come back at once so you can recover in the air once the stun ends.
+  knockback(from, { speed, up, stun }) {
+    if (this.dead) return;
+    this.combat.active = null;
+    this.dashT = 0;
+    if (this.grappling) this.endGrapple(false);
+    this.grapple.cd = 0;
+    _tmp.copy(this.pos).sub(from).setY(0);
+    if (_tmp.lengthSq() < 1e-4) _tmp.set(Math.sin(this.facing), 0, Math.cos(this.facing)).negate();
+    _tmp.normalize();
+    this.vel.set(_tmp.x * speed, up, _tmp.z * speed);
+    this.grounded = false;
+    this.coyote = 0;
+    this.stunT = stun;
+    this.hurtT = Math.max(this.hurtT, stun + 0.3);
+    this.airJumps = P.airJumps;
+    this.dashCharges = P.dashCharges;
+  }
+
   findTarget(controlMode) {
     const cone = Math.cos(((controlMode === 'mobile' ? P.grappleConeDegTouch : P.grappleConeDeg) * Math.PI) / 180);
     let best = null;

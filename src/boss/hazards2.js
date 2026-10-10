@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Hazard, additive, beamGeo, beamMaterial, pointInPlatform, distToSegment } from './hazards.js';
 import { addOutline } from '../fx/outline.js';
 import { audio } from '../audio/audio.js';
+import { groundHeightBelow } from '../world/collision.js';
 
 // Phase 2-3 attacks for Seraphina. Same contract as hazards.js:
 // update(dt) returns false when finished, cancel() removes it, threats(out) feeds the HUD arrows.
@@ -114,7 +115,7 @@ export class HaloBlades extends Hazard {
         }
       }
     }
-    if (r > 58) {
+    if (r > 80) {
       this.cancel();
       return false;
     }
@@ -523,11 +524,11 @@ export class AnnihilationBeam extends Hazard {
 
   // March along the beam's centre line until it hits a platform or pillar.
   measure() {
-    for (let d = 6; d < 140; d += 1) {
+    for (let d = 6; d < 170; d += 1) {
       this.end.copy(this.origin).addScaledVector(this.dir, d);
       if (pointInPlatform(this.end, this.ctx.world.colliders)) return d;
     }
-    return 140;
+    return 170;
   }
 
   threats(out) { out.push({ pos: this.origin, kind: 'laser' }); }
@@ -590,6 +591,245 @@ export class AnnihilationBeam extends Hazard {
     }
     this.cancel();
     return false;
+  }
+
+  cancel() {
+    this.ctx.boss.angel.setPose('idle');
+    super.cancel();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Judgement (Phase 3 ultimate, cast right after her knockback blast). She rises over the
+// centre of the arena under a huge sigil, then:
+//   1. pillars of light strike marked circles all over the arena, half of them around you;
+//   2. nova rings sweep outward at your feet's height: jump over them or dash through.
+// `level` (1-3, how many times she has cast it) adds pillars and rings.
+const sigilGeo = new THREE.RingGeometry(0.93, 1, 128).rotateX(-Math.PI / 2);
+const sigilInnerGeo = new THREE.RingGeometry(0.6, 0.62, 6, 1).rotateX(-Math.PI / 2); // hexagram-ish outline
+const novaWallGeo = new THREE.CylinderGeometry(1, 1, 1.6, 128, 1, true);
+const novaEdgeGeo = new THREE.TorusGeometry(1, 0.06, 6, 128).rotateX(Math.PI / 2);
+// Ring wall: brightest at mid-height, and fades out near the camera so it never washes the screen.
+function novaWallMaterial() {
+  return new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: { uColor: { value: new THREE.Color(0xff4a6a) }, uOpacity: { value: 0.55 } },
+    vertexShader: /* glsl */ `
+      varying float vV;
+      varying float vDist;
+      void main() {
+        vV = uv.y;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vDist = -mv.z;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      varying float vV;
+      varying float vDist;
+      void main() {
+        float band = 1.0 - abs(vV - 0.5) * 2.0;
+        float a = uOpacity * (0.35 + 0.65 * band) * smoothstep(2.0, 7.0, vDist);
+        gl_FragColor = vec4(uColor * (1.0 + band * 0.6), a);
+      }`,
+  });
+}
+export class Judgement extends Hazard {
+  constructor(ctx, { level = 1 } = {}) {
+    super(ctx);
+    this.level = level;
+    this.charge = 1.6;
+    this.rainDur = 2.8 + level * 0.6;
+    this.interval = 0.15 - level * 0.015;
+    this.warnT = 1.0;
+    this.strikeR = 3.4;
+    this.ringCount = level;
+    this.ringGap = 1.0;
+    this.ringSpeed = 22;
+    this.ringStart = this.charge + this.rainDur + this.warnT;
+    this.spawnT = this.charge;
+    this.spawned = 0;
+    this.strikes = [];
+    this.rings = [];
+    this.center = new THREE.Vector3();
+    ctx.boss.home.set(0, 22, 0);
+    ctx.boss.angel.setPose('cast');
+
+    // Sigil above her head: two counter-rotating rings and a hexagon.
+    this.sigil = this.add(new THREE.Group());
+    for (const [geo, r, op] of [[sigilGeo, 14, 0.9], [sigilGeo, 10, 0.6], [sigilInnerGeo, 16, 0.7]]) {
+      const m = new THREE.Mesh(geo, additive(0xff5a78, op, { side: THREE.DoubleSide }));
+      m.scale.setScalar(r);
+      m.frustumCulled = false;
+      this.sigil.add(m);
+    }
+    this.sigil.scale.setScalar(0.01);
+    this.chargeSnd = this.sound('beamCharge', { pos: ctx.boss.home, dur: this.charge });
+  }
+
+  threats(out) {
+    for (const s of this.strikes) if (!s.done) out.push({ pos: s.pos, kind: 'slam' });
+    if (this.t > this.ringStart - 1) out.push({ pos: this.center, kind: 'laser' });
+  }
+
+  // Same targeting as the meteors: alternate between around the player and anywhere.
+  pickTarget() {
+    const { player, world } = this.ctx;
+    let p = null;
+    let x = 0;
+    let z = 0;
+    if (this.spawned % 2 === 0) {
+      x = player.pos.x + (Math.random() - 0.5) * 10;
+      z = player.pos.z + (Math.random() - 0.5) * 10;
+      p = platformAt(world, x, z) || platformAt(world, player.pos.x, player.pos.z);
+      if (!p) return { p: null, off: null, pos: new THREE.Vector3(player.pos.x, player.pos.y, player.pos.z) };
+    } else {
+      const list = world.platforms.filter((q) => !q.crumble && q.r > 2);
+      p = list[Math.floor(Math.random() * list.length)];
+      const a = Math.random() * Math.PI * 2;
+      const rr = Math.random() * p.r * 0.75;
+      x = p.group.position.x + Math.sin(a) * rr;
+      z = p.group.position.z + Math.cos(a) * rr;
+    }
+    const gp = p.group.position;
+    return { p, off: new THREE.Vector3(x - gp.x, 0, z - gp.z), pos: new THREE.Vector3(x, gp.y, z) };
+  }
+
+  spawnStrike() {
+    const tg = this.pickTarget();
+    this.spawned++;
+    const marker = makeMarker(this, this.strikeR);
+    const beam = this.add(new THREE.Group());
+    for (const [r, c, i, pw] of [[0.35, 0xfff4f0, 1.2, 0.5], [0.9, 0xff5a78, 0.6, 1.8]]) {
+      const m = new THREE.Mesh(beamGeo, beamMaterial(c, i, pw));
+      m.scale.set(this.strikeR * r, 70, this.strikeR * r);
+      m.frustumCulled = false;
+      beam.add(m);
+    }
+    beam.visible = false;
+    this.strikes.push({ ...tg, marker, beam, t: 0, done: false, hit: false });
+  }
+
+  update(dt) {
+    this.tick(dt);
+    const { player, fx, boss } = this.ctx;
+    const t = this.t;
+    boss.getCorePos(this.center);
+
+    // Sigil grows over her during the charge, then hangs there spinning.
+    const k = Math.min(1, t / this.charge);
+    this.sigil.position.set(this.center.x, this.center.y + 7, this.center.z);
+    this.sigil.scale.setScalar(Math.max(0.01, 1 - (1 - k) ** 3));
+    this.sigil.children[0].rotation.y += dt * 0.6;
+    this.sigil.children[1].rotation.y -= dt * 0.9;
+    this.sigil.children[2].rotation.y += dt * 0.3;
+    const end = this.ringStart + this.ringCount * this.ringGap + 3.4;
+    const fadeOut = Math.max(0, Math.min(1, (end - t) / 0.6));
+    for (const m of this.sigil.children) m.material.opacity = (m.userData.op ??= m.material.opacity) * fadeOut * (0.75 + 0.25 * Math.sin(t * 9));
+    if (t < this.charge) {
+      fx.converge(this.sigil.position, { count: 4, radius: 16, color: 0xff6a8a, life: 0.5, size: 0.8 });
+      return true;
+    }
+
+    // ---- 1. Pillars of light ----
+    this.spawnT -= dt;
+    while (t < this.charge + this.rainDur && this.spawnT <= 0) {
+      this.spawnT += this.interval;
+      this.spawnStrike();
+    }
+    for (const s of this.strikes) {
+      if (s.done) continue;
+      s.t += dt;
+      if (s.p) s.pos.set(s.p.group.position.x + s.off.x, s.p.group.position.y, s.p.group.position.z + s.off.z);
+      s.marker.position.set(s.pos.x, s.pos.y + 0.06, s.pos.z);
+      const w = Math.min(1, s.t / this.warnT);
+      s.marker.userData.fill.scale.setScalar(Math.max(0.01, this.strikeR * w));
+      s.marker.userData.edge.material.opacity = 0.6 + Math.sin(s.t * 18) * 0.4;
+      if (w < 1) continue;
+      const ft = s.t - this.warnT;
+      if (!s.beam.visible) {
+        s.beam.visible = true;
+        s.marker.visible = false;
+        _a.copy(s.pos).y += 0.3;
+        fx.ring(_a, { color: 0xffc0cc, from: 0.5, to: this.strikeR * 2.2, life: 0.35 });
+        fx.burst(_a, { count: 24, color: 0xff7a9a, speed: 14, flat: true, life: 0.45, size: 0.5, gravity: 6 });
+        fx.scorch(_a.setY(s.pos.y + 0.05), { size: 2.4, life: 2.5 });
+        audio.play('judgement', { pos: s.pos });
+        this.ctx.shake(Math.max(0.04, 0.3 - player.pos.distanceTo(s.pos) / 90));
+      }
+      const fade = 1 - ft / 0.35;
+      s.beam.position.copy(s.pos);
+      for (const m of s.beam.children) {
+        m.material.uniforms.uTime.value = t;
+        m.material.uniforms.uLen.value = 70;
+        m.material.uniforms.uIntensity.value = (m === s.beam.children[0] ? 1.2 : 0.6) * Math.max(0, fade);
+      }
+      if (!s.hit && ft < 0.2) {
+        const hd = Math.hypot(player.pos.x - s.pos.x, player.pos.z - s.pos.z);
+        const dy = player.pos.y - s.pos.y;
+        if (hd < this.strikeR + 0.3 && dy > -1 && dy < 20 && this.tryHit(1, s.pos, 0.3)) s.hit = true;
+      }
+      if (fade <= 0) { s.done = true; s.beam.visible = false; }
+    }
+
+    // ---- 2. Nova rings ----
+    const launched = this.rings.length;
+    if (launched < this.ringCount && t >= this.ringStart - 1 + launched * this.ringGap) {
+      // Height locks on 1 s before launch: the ground under you, or your height in the air.
+      const gy = groundHeightBelow(player.pos.x, player.pos.y + 0.5, player.pos.z, this.ctx.world.colliders);
+      const y = (gy > -Infinity && player.pos.y - gy < 4 ? gy : player.pos.y) + 0.8;
+      const wall = this.add(new THREE.Mesh(novaWallGeo, novaWallMaterial()));
+      const edge = this.add(new THREE.Mesh(novaEdgeGeo, additive(0xfff0f0, 1)));
+      const band = this.add(new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 96).rotateX(-Math.PI / 2), additive(0xff4050, 0.4, { side: THREE.DoubleSide })));
+      wall.visible = edge.visible = false;
+      this.rings.push({ y, wall, edge, band, t: -1, r: 2, hit: false, sounded: false, c: this.center.clone() });
+    }
+    let ringsAlive = launched < this.ringCount;
+    for (const ring of this.rings) {
+      ring.t += dt;
+      if (ring.r > 90) continue;
+      ringsAlive = true;
+      const pd = Math.hypot(player.pos.x - ring.c.x, player.pos.z - ring.c.z);
+      if (ring.t < 0) {
+        // Warning: a band at the ring's height and your distance, flashing faster as it nears.
+        ring.band.position.set(ring.c.x, ring.y, ring.c.z);
+        ring.band.scale.setScalar(Math.max(1, pd));
+        ring.band.material.opacity = 0.3 + 0.25 * Math.sin(ring.t * (20 - ring.t * 10));
+        continue;
+      }
+      if (!ring.sounded) {
+        ring.sounded = true;
+        ring.wall.visible = ring.edge.visible = true;
+        audio.play('novaRing', { pos: ring.c });
+        this.ctx.shockwave?.(_a.set(ring.c.x, ring.y, ring.c.z), { strength: 0.8, speed: 1.0, life: 0.5 });
+      }
+      ring.r += this.ringSpeed * dt;
+      ring.wall.position.set(ring.c.x, ring.y, ring.c.z);
+      ring.wall.scale.set(ring.r, 1, ring.r);
+      ring.edge.position.copy(ring.wall.position);
+      ring.edge.scale.set(ring.r, 1, ring.r);
+      ring.band.scale.setScalar(Math.max(ring.r + 0.5, pd));
+      ring.band.material.opacity = 0.35;
+      const fade = 1 - Math.max(0, (ring.r - 70) / 20);
+      ring.wall.material.uniforms.uOpacity.value = 0.55 * fade;
+      ring.edge.material.opacity = fade;
+      if (ring.r > 90) { ring.wall.visible = ring.edge.visible = ring.band.visible = false; continue; }
+      // Body (feet to head) overlaps the wall's 1.6 m band as it passes.
+      if (!ring.hit && Math.abs(pd - ring.r) < 0.8 && player.pos.y < ring.y + 0.8 && player.pos.y + 1.8 > ring.y - 0.8) {
+        if (this.tryHit(2, _a.set(ring.c.x, ring.y, ring.c.z), 0.3)) ring.hit = true;
+      }
+    }
+
+    const strikesAlive = t < this.charge + this.rainDur || this.strikes.some((s) => !s.done);
+    if (!strikesAlive && !ringsAlive && t > end - 0.5) {
+      this.cancel();
+      return false;
+    }
+    return true;
   }
 
   cancel() {

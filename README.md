@@ -65,6 +65,8 @@ Tips:
 - Settings → "Screen shake & flashes: REDUCED" tones down shake, flashes and distortion.
 - Phase 2: break the 4 jewels on her wings. Phase 3: hit the heart jewel on her chest.
 - Annihilation beam ("TAKE COVER"): get a pillar or platform between you and her, or perfect-dodge.
+- Judgement (Phase 3, every quarter of its HP): she blasts you away, then light pillars strike
+  the marked circles and nova rings sweep out at your height. Jump over the rings or dash through.
 - Dying in Phase 2 or 3 lets you continue from the start of that phase.
 
 ## Code layout
