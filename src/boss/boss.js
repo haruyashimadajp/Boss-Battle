@@ -158,15 +158,11 @@ export class Boss {
     this.scene.add(a.root);
 
     // Body spheres: collision and sword targets (local offsets from her chest).
-    this.angelParts = [
-      { off: new THREE.Vector3(0, 2.95, 0), r: 1.4 },
-      { off: new THREE.Vector3(0, 0.6, 0), r: 1.35 },
-      { off: new THREE.Vector3(0, -2.6, 0), r: 2.4 },
-    ].map((p) => ({ ...p, col: makeSphere(0, HIDDEN_Y, 0, p.r), pos: new THREE.Vector3() }));
+    this.angelParts = a.hitParts.map((p) => ({ ...p, col: makeSphere(0, HIDDEN_Y, 0, p.r), pos: new THREE.Vector3() }));
     for (const p of this.angelParts) world.colliders.push(p.col);
 
     // Wing jewels (Phase 2 weak points, also grapple targets).
-    const jewelGeo = new THREE.IcosahedronGeometry(0.5, 1);
+    const jewelGeo = new THREE.OctahedronGeometry(0.55, 0).scale(0.75, 1.25, 0.75); // cut gem, like her heart
     const ringGeo = new THREE.TorusGeometry(0.85, 0.05, 6, 32);
     this.wp2 = a.wingJewelSpots.map((spot, i) => {
       const mat = new THREE.MeshStandardMaterial({ color: 0x400018, emissive: 0xff3d7e, emissiveIntensity: 1.5 });
@@ -178,7 +174,8 @@ export class Boss {
     });
     // Heart jewel (Phase 3 weak point). It never breaks; it is where the finisher lands.
     const heartRing = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.05, 6, 32), new THREE.MeshBasicMaterial({ color: 0xff8fb0, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }));
-    const heartAnchor = world.addAnchor(a.torso, 0, 0.5, 1.05, { kind: 'weak', crystal: new THREE.Object3D(), ring: heartRing });
+    const h = a.heartSpot;
+    const heartAnchor = world.addAnchor(a.torso, h.x, h.y, h.z, { kind: 'weak', crystal: new THREE.Object3D(), ring: heartRing });
     this.wp3 = [{ id: 'heart', anchor: heartAnchor, mat: a.M.jewel, maxHp: Infinity, hp: Infinity, alive: true, flash: 0, heart: true }];
     // Plain grapple points on the upper wing tips.
     this.angelAnchors = a.wingTips.map((tip) => world.addAnchor(tip.parent, tip.pos.x, tip.pos.y, tip.pos.z));
@@ -684,6 +681,7 @@ export class Boss {
     a.root.rotation.y = this.yaw;
     a.root.rotation.z = this.state === 'broken' ? Math.sin(t * 1.5) * 0.12 : 0;
     a.state.flap = this.state === 'broken' ? 0.4 : this.phase === 3 ? 1.5 : 1;
+    a.lookTarget = player && !['dying', 'dead'].includes(this.state) ? player.pos : null;
     a.update(dt, t);
 
     // Body spheres follow her.
@@ -703,12 +701,7 @@ export class Boss {
     }
 
     this.flash = Math.max(0, this.flash - dt * 8);
-    // Hit flash: brighten her rim briefly.
-    for (const key of ['skin', 'dress', 'hair', 'armor']) {
-      const m = a.M[key];
-      m.emissive.setScalar(this.flash * 0.6);
-      m.emissiveIntensity = 1;
-    }
+    a.setFlash(this.flash); // hit flash
     this.updateWeakGlow(this.phase === 2 ? this.wp2 : this.wp3, dt, t);
   }
 

@@ -78,6 +78,7 @@ Tips:
     src/camera.js          third-person camera (lock-on, collision, FOV kick, shake)
     src/player/            character controller, sword combat, Overdrive waves and model
     src/boss/              boss state machine (3 phases), angel model, attacks (hazards*.js)
+    src/boss/seraphina/    angel shading, painted textures (face, lace, embroidery), geometry builders
     src/world/             arena builder and collision
     src/fx/                particles/rings/afterimages, post-processing
     src/ui/                HUD and menus

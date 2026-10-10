@@ -52,15 +52,16 @@ Arena: ring of floating rock platforms around the boss.
 - Weak points: 4 wing cores (reach them via grapple anchors on the wings)
 
 ### Phase 2 — ECLIPSE (60–25 %) — Seraphina
-The Seraph's core cracks open and **Seraphina** hatches from it: a ~9 m angel girl
-(anime toon style: big eyes, blonde twin tails with pink ribbons, halo, white feathered wings,
-white-and-gold dress, star staff). The center platform crumbles; the arena slowly orbits.
+The Seraph's core cracks open and **Seraphina** hatches from it: a ~9.5 m angel girl in a
+detailed anime style: delicate face with glowing blue eyes and pink cheeks, long flowing silver
+hair, a golden halo, a white-and-gold priestess dress with lace and frills, one pair of large
+white feathered wings and a winged gold staff. The center platform crumbles; the arena slowly orbits.
 - Halo blades: her halo splits into a spinning ring of blades with gaps (slip through / jump / dash)
 - Spiral barrage: rotating arms of light bullets aimed through your height
 - Gravity well: black star at your position pulls you in, then bursts (dash or grapple out)
 - Lance dash: aims her staff (red line) and charges through your position
 - Also reuses the laser sweep and homing orbs; layered combos below 45 %
-- Weak points: 4 wing jewels (grapple targets). Grapple points on her upper wing tips
+- Weak points: 4 wing jewels, two on each wing (grapple targets). Grapple points on her wing tips
 
 ### Phase 3 — SUPERNOVA (25–0 %)
 Crimson wings, red eyes, angry face; sky turns crimson, arena orbits faster, shorter pauses.
@@ -164,6 +165,20 @@ Code layout (planned):
 - **Lock-on camera** is on by default (huge boss above the arena). Turning the camera by hand
   overrides it for ~0.7 s, so grappling elsewhere still works. Toggle: Tab / R / middle mouse / LOCK.
 - Phases 2–3 boss is a humanoid angel girl (user request), kept cute and wholesome.
+- **Seraphina's model** (rebuilt in detail after v1.0, user request), all procedural, no asset files:
+  - Cel shader with tinted shadows (rosy on skin, lavender on cloth), a thin rim light and a
+    camera-relative key light, so she reads well from wherever the player is. Lit whites stay under
+    the bloom threshold, so she doesn't glow.
+  - Face: a decal painted on canvas (4x4 atlas: eyes, glowing irises, brows, mouths, blush).
+    Six expressions (calm, angry, blink, happy, dizzy, plus angry blink); irises follow the player.
+  - Silver hair from tapered strands (fringe, side locks, a long back curtain draped over the
+    skirt), an anime "angel ring" highlight, and sway in a vertex shader that also reacts to her
+    movement. The outlines use the same sway, so they stay attached.
+  - Priestess dress: bodice, gold collar plate, heart jewel in a gold sunburst, bell sleeves,
+    layered skirt with folds, ruffles, lace (alpha-tested), embroidered gold borders and a front panel.
+  - Wings: three segments each (arm, forearm, hand) so a beat ripples to the tips; about 70
+    shaped feathers per wing in six rows (flight feathers and three rows of coverts).
+  - Budget: ~160k triangles and ~100 draw calls, about half of each for the outline hulls.
 - **Overdrive** (step 5): gauge from hits (+2 %), weak hits (+3.5 %), reflects (+5 %), perfect
   dodges (+25 %), weak-point kills (+10 %) and breaks (+15 %). 8 s of 1.3x swing speed, 1.4x damage,
   free dashes and sword waves (35 % damage, aimed at the target in front, 3 on a heavy hit).
