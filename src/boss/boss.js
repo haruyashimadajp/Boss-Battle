@@ -463,31 +463,31 @@ export class Boss {
 
     if (this.phase === 1) {
       let pick = pickFrom({ laser: 1, orbs: 1, slam: 1 });
-      if (hpFrac < 0.8 && Math.random() < 0.35) pick = 'combo';
+      if (hpFrac < 0.85 && Math.random() < 0.45) pick = 'combo';
       this.lastAttack = pick === 'combo' ? null : pick;
       if (pick === 'laser') push(new LaserSweep(ctx));
-      if (pick === 'orbs') push(new OrbVolley(ctx, hpFrac < 0.8 ? 12 : 10));
+      if (pick === 'orbs') push(new OrbVolley(ctx, hpFrac < 0.8 ? 14 : 12));
       if (pick === 'slam') push(new WingSlam(ctx));
-      if (pick === 'combo') { push(new OrbVolley(ctx, 6)); push(new WingSlam(ctx)); }
+      if (pick === 'combo') { push(new OrbVolley(ctx, 8)); push(new WingSlam(ctx)); }
       return;
     }
 
     this.reposition();
     if (this.phase === 2) {
       let pick = pickFrom({ laser: 1, orbs: 0.8, blades: 1.4, spiral: 1.3, well: 1, lance: 1.2 });
-      if (hpFrac < 0.45 && Math.random() < 0.3) pick = 'combo';
+      if (hpFrac < 0.6 && Math.random() < 0.4) pick = 'combo';
       this.lastAttack = pick === 'combo' ? null : pick;
       if (pick === 'laser') push(new LaserSweep(ctx));
-      if (pick === 'orbs') push(new OrbVolley(ctx, 10));
-      if (pick === 'blades') push(new HaloBlades(ctx));
-      if (pick === 'spiral') push(new SpiralBarrage(ctx));
+      if (pick === 'orbs') push(new OrbVolley(ctx, 12));
+      if (pick === 'blades') push(new HaloBlades(ctx, { speed: 17 }));
+      if (pick === 'spiral') push(new SpiralBarrage(ctx, { speed: 13, interval: 0.065 }));
       if (pick === 'well') push(new GravityWell(ctx));
-      if (pick === 'lance') push(new LanceDash(ctx));
+      if (pick === 'lance') push(new LanceDash(ctx, { telegraph: 0.85 }));
       if (pick === 'combo') {
         const c = Math.floor(Math.random() * 3);
-        if (c === 0) { push(new SpiralBarrage(ctx, { arms: 2 })); push(new GravityWell(ctx)); }
-        if (c === 1) { push(new HaloBlades(ctx)); push(new OrbVolley(ctx, 6)); }
-        if (c === 2) { push(new LanceDash(ctx)); push(new SpiralBarrage(ctx, { arms: 2, duration: 1.6 })); }
+        if (c === 0) { push(new SpiralBarrage(ctx, { arms: 3, speed: 13 })); push(new GravityWell(ctx)); }
+        if (c === 1) { push(new HaloBlades(ctx, { speed: 17 })); push(new OrbVolley(ctx, 8)); }
+        if (c === 2) { push(new LanceDash(ctx, { telegraph: 0.85 })); push(new SpiralBarrage(ctx, { arms: 3, duration: 1.8 })); }
       }
       return;
     }
@@ -497,22 +497,22 @@ export class Boss {
     if (this.recent.includes('beam')) delete weights.beam;
     let pick = pickFrom(weights);
     const desperate = hpFrac < 0.1;
-    if (Math.random() < (desperate ? 0.6 : 0.35) && pick !== 'beam') pick = 'combo';
+    if (Math.random() < (desperate ? 0.7 : 0.45) && pick !== 'beam') pick = 'combo';
     this.lastAttack = pick === 'combo' ? null : pick;
     this.recent.push(pick);
     if (this.recent.length > 3) this.recent.shift();
-    const spiral3 = { arms: 4, speed: 14, turn: 1.8 };
-    if (pick === 'meteors') push(new MeteorRain(ctx));
+    const spiral3 = { arms: 4, speed: 15, turn: 1.9, interval: 0.065 };
+    if (pick === 'meteors') push(new MeteorRain(ctx, { count: 18, fall: 1.15 }));
     if (pick === 'beam') push(new AnnihilationBeam(ctx));
-    if (pick === 'blades') push(new HaloBlades(ctx, { count: 12, gaps: 2, speed: 18, spin: 0.8 }));
+    if (pick === 'blades') push(new HaloBlades(ctx, { count: 12, gaps: 2, speed: 20, spin: 0.9 }));
     if (pick === 'spiral') push(new SpiralBarrage(ctx, spiral3));
-    if (pick === 'lance') push(new LanceDash(ctx, { telegraph: 0.75, dash: 0.32 }));
+    if (pick === 'lance') push(new LanceDash(ctx, { telegraph: 0.65, dash: 0.3 }));
     if (pick === 'well') push(new GravityWell(ctx));
     if (pick === 'combo') {
       const c = Math.floor(Math.random() * 3);
-      if (c === 0) { push(new MeteorRain(ctx, { count: 10 })); push(new SpiralBarrage(ctx, { arms: 3, speed: 13 })); }
-      if (c === 1) { push(new HaloBlades(ctx, { count: 12, gaps: 2, speed: 18 })); push(new GravityWell(ctx)); }
-      if (c === 2) { push(new LanceDash(ctx, { telegraph: 0.75, dash: 0.32 })); push(new MeteorRain(ctx, { count: 8 })); }
+      if (c === 0) { push(new MeteorRain(ctx, { count: 12, fall: 1.15 })); push(new SpiralBarrage(ctx, { arms: 4, speed: 14 })); }
+      if (c === 1) { push(new HaloBlades(ctx, { count: 12, gaps: 2, speed: 20 })); push(new GravityWell(ctx)); }
+      if (c === 2) { push(new LanceDash(ctx, { telegraph: 0.65, dash: 0.3 })); push(new MeteorRain(ctx, { count: 10, fall: 1.15 })); }
     }
   }
 
@@ -555,7 +555,7 @@ export class Boss {
         if (this.hazards.length === 0) {
           this.state = 'idle';
           const [lo, hi] = this.phase === 1 ? [BOSS.idleMin, BOSS.idleMax]
-            : this.phase === 2 ? [0.8, 1.4] : this.hp / BOSS.maxHp < 0.1 ? [0.35, 0.7] : [0.6, 1.1];
+            : this.phase === 2 ? [0.6, 1.1] : this.hp / BOSS.maxHp < 0.1 ? [0.25, 0.55] : [0.45, 0.85];
           this.idleT = (lo + Math.random() * (hi - lo)) * this.idleMult;
         }
         break;

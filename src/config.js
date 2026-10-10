@@ -70,26 +70,25 @@ export const COMBAT = {
 };
 
 export const BOSS = {
-  maxHp: 16000, // scripted bot: ~40 s with nonstop sword uptime, ~2.2 min at 30 % uptime
+  maxHp: 20000, // scripted bot: ~50 s with nonstop sword uptime, ~2.8 min at 30 % uptime
   phase1End: 0.6, // fraction of HP where Phase 1 ends
   phase2End: 0.25, // fraction of HP where Phase 2 ends (Phase 3 runs to 0)
-  angelWeakHp: 320, // wing jewels in Phase 2
-  phaseHeal: 3, // HP restored to the player when a new phase begins
+  angelWeakHp: 400, // wing jewels in Phase 2
   hoverY: 30,
   coreRadius: 6,
   brokenY: 10,
   breakDuration: 6,
   brokenMult: 2.0,
   weakMult: 1.5,
-  weakHp: 350,
+  weakHp: 420,
   weakDestroyBonus: 200,
   breakPerWeakHit: 0.07,
   breakPerCoreHit: 0.015,
   breakPerWeakDestroy: 0.3,
   breakPerReflect: 0.08,
   reflectDmg: 150,
-  idleMin: 0.9,
-  idleMax: 1.6,
+  idleMin: 0.7,
+  idleMax: 1.25,
   perfectSlowmo: 1.5, // seconds of slowed boss time after a perfect dodge
   perfectScale: 0.25,
   dmg: { laser: 2, orb: 1, slam: 2, shockwave: 1 },
@@ -124,6 +123,6 @@ export const OVERDRIVE = {
 
 // Difficulty presets (Settings → Difficulty). HARD is the intended experience.
 export const DIFFICULTY = {
-  normal: { maxHp: 9, idleMult: 1.35, iframes: 0.26, phaseHeal: 4, label: 'NORMAL' },
-  hard: { maxHp: 6, idleMult: 1, iframes: 0.2, phaseHeal: 3, label: 'HARD' },
+  normal: { maxHp: 9, idleMult: 1.35, iframes: 0.26, label: 'NORMAL' },
+  hard: { maxHp: 6, idleMult: 1, iframes: 0.2, label: 'HARD' },
 };

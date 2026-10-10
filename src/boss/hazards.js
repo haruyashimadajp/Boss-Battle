@@ -159,10 +159,10 @@ export class LaserSweep extends Hazard {
   constructor(ctx) {
     super(ctx);
     this.telegraph = 1.0;
-    this.sweep = 1.7;
+    this.sweep = 1.45;
     this.tail = 0.35;
     this.sign = Math.random() < 0.5 ? 1 : -1;
-    this.arc = 1.25;
+    this.arc = 1.4;
     this.origin = new THREE.Vector3();
     this.dir = new THREE.Vector3();
     this.end = new THREE.Vector3();
@@ -489,10 +489,10 @@ const pillarGeo = new THREE.CylinderGeometry(1, 1, 40, 16, 1, true).translate(0,
 export class WingSlam extends Hazard {
   constructor(ctx) {
     super(ctx);
-    this.telegraph = 1.1;
+    this.telegraph = 0.95;
     this.drop = 0.13;
     this.radius = 5;
-    this.waveMax = 22;
+    this.waveMax = 26;
     this.waveTime = 0.9;
     this.center = new THREE.Vector3();
     this.track();

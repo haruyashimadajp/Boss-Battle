@@ -259,7 +259,7 @@ const boss = new Boss(scene, world, fx, {
     post.pulse(1.5);
     setTimeout(() => hud.banner(...PHASE_TITLES[phase].slice(0, 1), phase === 3 ? 'bad' : 'gold', 2.4), 900);
   },
-  // New phase begins: checkpoint, some HP back, player placed on solid ground.
+  // New phase begins: checkpoint, player placed on solid ground. HP carries over.
   onPhaseStart: (phase) => {
     fight.cine = null;
     setCinematic(false);
@@ -268,7 +268,7 @@ const boss = new Boss(scene, world, fx, {
     hud.setBossPhase(phase, boss.name);
     hud.banner(PHASE_TITLES[phase][1], phase === 3 ? 'bad' : 'perfect', 1.8);
     playMusic(`phase${phase}`, 0.3);
-    const hp = Math.min(PLAYER.maxHp, player.hp + BOSS.phaseHeal);
+    const hp = player.hp;
     player.respawn();
     player.hp = hp;
     rig.snap(player);
@@ -380,12 +380,11 @@ function setCinematic(on, skippable = false) {
   document.body.classList.toggle('skippable', on && skippable);
 }
 
-// Difficulty preset: player HP, dodge window, boss pacing, HP restored between phases.
+// Difficulty preset: player HP, dodge window, boss pacing.
 function applyDifficulty() {
   const d = DIFFICULTY[settings.get('difficulty')] || DIFFICULTY.hard;
   PLAYER.maxHp = d.maxHp;
   PLAYER.dashIFrames = d.iframes;
-  BOSS.phaseHeal = d.phaseHeal;
   boss.idleMult = d.idleMult;
   hud.setMaxHp(d.maxHp);
 }

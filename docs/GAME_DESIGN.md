@@ -81,7 +81,7 @@ Crimson wings, red eyes, angry face; sky turns crimson, arena orbits faster, sho
   white flash, she smiles and dissolves into light → VICTORY + rank
 
 Checkpoints at the start of Phases 2 and 3 (result screen offers "FROM PHASE N").
-Each new phase restores 3 HP.
+HP carries over between phases (no healing); a checkpoint retry starts with full HP.
 
 ## 4. Effects ("make it flashy")
 
@@ -191,8 +191,8 @@ Code layout (planned):
   dodges (+25 %), weak-point kills (+10 %) and breaks (+15 %). 8 s of 1.3x swing speed, 1.4x damage,
   free dashes and sword waves (35 % damage, aimed at the target in front, 3 on a heavy hit).
   Activation blast clears boss projectiles within 12 m. Colour: violet-white (not used by the boss).
-- **Difficulty**: HARD (default, the intended experience: 6 HP, 3 HP back per phase) and NORMAL
-  (9 HP, 4 back, 35 % longer pauses between attacks, slightly longer dash invincibility).
+- **Difficulty**: HARD (default, the intended experience: 6 HP) and NORMAL (9 HP, 35 % longer
+  pauses between attacks, slightly longer dash invincibility). No HP is restored between phases.
 - **Balance pass** (step 5), measured with a scripted bot glued to the boss and swinging nonstop:
   - Before: Phase 2 died in ~3 s of uptime, because one swing popped several clustered wing jewels
     and every destroy paid a 400 bonus.
@@ -214,6 +214,11 @@ Code layout (planned):
   - Every attack shows its full danger area before it hits: laser = red sweep fan,
     slam = dark-red zone + pillar + shockwave reach ring, shockwave = visible wall at hit height.
   - Off-screen threats get red arrows on the screen edge.
+- **Harder tuning** (after playtest feedback): boss HP 16000 → 20000 (weak points 350 → 420,
+  wing jewels 320 → 400); shorter pauses between attacks in every phase (Phase 3: 0.45–0.85 s,
+  0.25–0.55 s below 10 %); combos start earlier and come more often; faster laser sweep and
+  halo blades, denser spirals, more orbs and meteors, shorter lance and beam charges, wider
+  slam shockwave. The phase-change HP heal was removed.
 
 ## 9. Open questions
 

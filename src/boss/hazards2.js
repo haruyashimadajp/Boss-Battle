@@ -496,8 +496,8 @@ export class MeteorRain extends Hazard {
 export class AnnihilationBeam extends Hazard {
   constructor(ctx) {
     super(ctx);
-    this.telegraph = 2.4;
-    this.fire = 1.5;
+    this.telegraph = 2.1;
+    this.fire = 1.6;
     this.radius = 4.5;
     this.origin = new THREE.Vector3();
     this.dir = new THREE.Vector3();
