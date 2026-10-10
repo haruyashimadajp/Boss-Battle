@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PLAYER as P, BOSS } from '../config.js';
+import { PLAYER as P, BOSS, OVERDRIVE as OD } from '../config.js';
 
 const _v = new THREE.Vector3();
 
@@ -17,6 +17,10 @@ export class HUD {
     this.fpsTime = 0;
     this.lastHp = P.maxHp;
     this.flashScale = 1;
+    this.odBar = document.getElementById('od-bar');
+    this.odFill = this.odBar.querySelector('i');
+    this.odBtn = document.getElementById('btn-od');
+    this.odState = '';
 
     this.bossBar = document.getElementById('boss-bar');
     this.bossFill = this.bossBar.querySelector('.boss-hp-fill');
@@ -93,6 +97,11 @@ export class HUD {
     });
   }
 
+  setMaxHp(n) {
+    this.hpPips = this.makePips('hp-pips', n);
+    this.lastHp = n;
+  }
+
   show(on) { this.root.hidden = !on; }
   showFps(on) { this.fpsEl.hidden = !on; }
   showBoss(on) { this.bossBar.hidden = !on; }
@@ -153,6 +162,17 @@ export class HUD {
     this.hpPips.forEach((p, i) => p.classList.toggle('full', i < player.hp));
     this.dashPips.forEach((p, i) => p.classList.toggle('full', i < player.dashCharges));
     this.airPips.forEach((p, i) => p.classList.toggle('full', i < player.airJumps));
+
+    // Overdrive gauge: fills up, pulses when ready, drains while active.
+    const odActive = player.overdrive;
+    const odFill = odActive ? player.odT / OD.duration : player.od;
+    this.odFill.style.transform = `scaleX(${odFill})`;
+    const odState = odActive ? 'active' : player.od >= 1 ? 'ready' : '';
+    if (odState !== this.odState) {
+      this.odState = odState;
+      this.odBar.className = odState;
+      this.odBtn.classList.toggle('ready', odState === 'ready');
+    }
 
     const a = player.grappling ? player.grapple.anchor : player.target;
     if (a) {

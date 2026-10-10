@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Hazard, additive, beamGeo, beamMaterial, pointInPlatform, distToSegment } from './hazards.js';
 import { addOutline } from '../fx/outline.js';
+import { audio } from '../audio/audio.js';
 
 // Phase 2-3 attacks for Seraphina. Same contract as hazards.js:
 // update(dt) returns false when finished, cancel() removes it, threats(out) feeds the HUD arrows.
@@ -69,6 +70,7 @@ export class HaloBlades extends Hazard {
     ctx.boss.angel.halo.visible = false;
     ctx.boss.angel.setPose('cast');
     this.r = 3;
+    this.sound('bladesCharge', { pos: this.center });
   }
 
   threats(out) { out.push({ pos: this.center, kind: 'laser' }); }
@@ -82,7 +84,10 @@ export class HaloBlades extends Hazard {
       this.y0 = player.pos.y + 1;
     }
     this.rot += this.spin * dt * (t < this.telegraph ? 3 : 1);
-    if (t >= this.telegraph) this.r += this.speed * dt;
+    if (t >= this.telegraph) {
+      this.r += this.speed * dt;
+      if (!this.spinSnd) this.spinSnd = this.sound('bladesSpin', { pos: this.center });
+    }
     const r = this.r;
     for (const b of this.blades) {
       const a = b.a + this.rot;
@@ -142,10 +147,20 @@ export class SpiralBarrage extends Hazard {
     this.glow = this.add(new THREE.InstancedMesh(bulletGlowGeo, additive(0xff2a6a, 0.35), MAX_BULLETS));
     for (const im of [this.outline, this.core, this.glow]) { im.count = 0; im.frustumCulled = false; }
     ctx.boss.angel.setPose('cast');
+    this.sound('spiralCharge', { pos: ctx.boss.getCorePos(_c) });
   }
 
   threats(out) {
     if (this.t < this.telegraph + this.duration) out.push({ pos: this.ctx.boss.getCorePos(_c), kind: 'orb' });
+  }
+
+  // Overdrive activation blast.
+  clearNear(pos, r) {
+    this.bullets = this.bullets.filter((b) => {
+      if (b.pos.distanceTo(pos) >= r) return true;
+      this.ctx.fx.burst(b.pos, { count: 3, color: 0xc89bff, speed: 5, life: 0.3 });
+      return false;
+    });
   }
 
   update(dt) {
@@ -156,6 +171,7 @@ export class SpiralBarrage extends Hazard {
     if (t < this.telegraph) {
       fx.converge(origin, { count: 3, radius: 6, color: 0xff4a8a, life: 0.3 });
     } else if (t < this.telegraph + this.duration) {
+      if (!this.fireSnd) this.fireSnd = this.sound('spiral', { pos: origin });
       this.emitT -= dt;
       while (this.emitT <= 0) {
         this.emitT += this.interval;
@@ -169,9 +185,12 @@ export class SpiralBarrage extends Hazard {
           this.bullets.push({ pos: origin.clone().addScaledVector(dir, 3), vel: dir.multiplyScalar(this.speed), life: 5 });
         }
       }
-    } else if (this.bullets.length === 0) {
-      this.cancel();
-      return false;
+    } else {
+      this.fireSnd?.stop(0.2);
+      if (this.bullets.length === 0) {
+        this.cancel();
+        return false;
+      }
     }
 
     playerCenter(player, _a);
@@ -226,6 +245,7 @@ export class GravityWell extends Hazard {
     this.zone = this.add(new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), additive(0xff3050, 0.07, { side: THREE.BackSide })));
     this.zoneRing = this.add(new THREE.Mesh(edgeGeo, additive(0xff4060, 0.9, { side: THREE.DoubleSide })));
     ctx.boss.angel.setPose('point');
+    this.formSnd = this.sound('wellForm', { pos: this.center });
   }
 
   threats(out) { out.push({ pos: this.center, kind: 'slam' }); }
@@ -260,6 +280,9 @@ export class GravityWell extends Hazard {
     }
     if (t >= this.form + this.pull && !this.exploded) {
       this.exploded = true;
+      this.formSnd.stop(0.05);
+      audio.play('wellBurst', { pos: c });
+      audio.duckMusic(0.5, 0.5);
       fx.ring(c, { color: 0xd8a8ff, from: 1, to: this.blast * 2.2, life: 0.45, normal: this.ctx.camNormal });
       fx.burst(c, { count: 60, color: 0xb98aff, speed: 22, life: 0.5, size: 0.55 });
       fx.shards(c, { glow: true, count: 24, color: new THREE.Color(1.6, 0.8, 3), speed: 20, size: 0.6, life: 0.9, up: 0 });
@@ -296,6 +319,7 @@ export class LanceDash extends Hazard {
     this.warnCore = this.add(new THREE.Mesh(beamGeo, additive(0xff6070, 0.9)));
     this.prev = this.start.clone();
     ctx.boss.angel.setPose('lance');
+    this.chargeSnd = this.sound('lanceCharge', { pos: this.start, dur: this.telegraph });
   }
 
   aim() {
@@ -331,6 +355,7 @@ export class LanceDash extends Hazard {
     }
     const dt2 = t - this.telegraph;
     if (dt2 < this.dash) {
+      if (this.warn.visible) { this.chargeSnd.stop(0.03); audio.play('lanceDash', { pos: this.start }); }
       this.warn.visible = this.warnCore.visible = false;
       const k = dt2 / this.dash;
       const e = k * k * (3 - 2 * k);
@@ -415,6 +440,7 @@ export class MeteorRain extends Hazard {
       addOutline(rock, { color: 0x100400, thickness: 0.004, filter: (o) => o === rock });
       const from = new THREE.Vector3((Math.random() - 0.5) * 20, 50, (Math.random() - 0.5) * 20);
       this.meteors.push({ ...tg, target: tg.pos, marker, rock, from, t: 0, done: false });
+      audio.play('meteorFall', { pos: tg.pos });
     }
 
     let alive = this.spawned < this.count;
@@ -442,6 +468,7 @@ export class MeteorRain extends Hazard {
         fx.shards(_a, { count: 10, color: 0x4a3030, speed: 12, size: 0.9, life: 1.2 });
         fx.scorch(_a.setY(m.target.y + 0.05), { size: 2.6, life: 3 });
         this.ctx.shockwave?.(m.target, { strength: 0.6, speed: 1.2, life: 0.35 });
+        audio.play('meteorImpact', { pos: m.target });
         const d = player.pos.distanceTo(m.target);
         this.ctx.shake(Math.max(0.05, 0.35 - d / 80));
         const hd = Math.hypot(player.pos.x - m.target.x, player.pos.z - m.target.z);
@@ -484,6 +511,7 @@ export class AnnihilationBeam extends Hazard {
     this.aim();
     ctx.boss.angel.setPose('charge');
     ctx.banner?.('!! TAKE COVER !!', 'bad', 1.6);
+    this.chargeSnd = this.sound('beamCharge', { pos: this.origin, dur: this.telegraph });
   }
 
   aim() {
@@ -531,6 +559,9 @@ export class AnnihilationBeam extends Hazard {
       if (!this.beam.visible) {
         this.beam.visible = true;
         this.warn.visible = this.warnLine.visible = false;
+        this.chargeSnd.stop(0.05);
+        this.sound('beamFire', { pos: this.origin });
+        audio.duckMusic(0.7, 1.5);
         this.ctx.shockwave?.(this.charge.position, { strength: 1.8, speed: 0.7, life: 0.8 });
         this.ctx.flash?.('#ffd0d8', 0.5);
       }

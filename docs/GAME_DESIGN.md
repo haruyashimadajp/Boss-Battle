@@ -20,7 +20,7 @@ Pillars:
 
 ## 2. Player
 
-Controls (keyboard + mouse, gamepad later):
+Controls (keyboard + mouse; gamepad and touch also supported):
 
 - WASD: move / Mouse: camera (pointer lock)
 - Space: jump, double jump
@@ -145,7 +145,9 @@ Code layout (planned):
 4. ✅ Phases 2–3, transitions, finisher, HUD, title/result screens
    (Seraphina angel-girl form, 6 new attacks, orbiting arena, transform cinematics,
    checkpoints, dissolve finale)
-5. Audio, balance, quality settings, polish
+5. ✅ Audio, balance, quality settings, polish
+   (synthesized SFX for every action and attack, procedural soundtrack per phase, Overdrive,
+   NORMAL / HARD, bot-measured balance pass, auto resolution, gamepad, best records)
 
 ## 8. Decisions
 
@@ -162,8 +164,26 @@ Code layout (planned):
 - **Lock-on camera** is on by default (huge boss above the arena). Turning the camera by hand
   overrides it for ~0.7 s, so grappling elsewhere still works. Toggle: Tab / R / middle mouse / LOCK.
 - Phases 2–3 boss is a humanoid angel girl (user request), kept cute and wholesome.
-- Overdrive (ultimate) is deferred to the effects/polish steps.
-- Graphics presets: LOW (no post-processing), MEDIUM (bloom, mobile default), HIGH (bloom + shadows)
+- **Overdrive** (step 5): gauge from hits (+2 %), weak hits (+3.5 %), reflects (+5 %), perfect
+  dodges (+25 %), weak-point kills (+10 %) and breaks (+15 %). 8 s of 1.3x swing speed, 1.4x damage,
+  free dashes and sword waves (35 % damage, aimed at the target in front, 3 on a heavy hit).
+  Activation blast clears boss projectiles within 12 m. Colour: violet-white (not used by the boss).
+- **Difficulty**: HARD (default, the intended experience: 6 HP, 3 HP back per phase) and NORMAL
+  (9 HP, 4 back, 35 % longer pauses between attacks, slightly longer dash invincibility).
+- **Balance pass** (step 5), measured with a scripted bot glued to the boss and swinging nonstop:
+  - Before: Phase 2 died in ~3 s of uptime, because one swing popped several clustered wing jewels
+    and every destroy paid a 400 bonus.
+  - Changes: one weak point per swing / wave / plunge landing; destroy bonus 400 → 200; break
+    damage 2.5x → 2x; boss HP 10 000 → 16 000; rank time penalty eased to match.
+  - After: ~40 s of nonstop uptime for the whole fight, ~2.2 min at 30 % uptime. Expected real
+    fight: roughly 4–7 minutes.
+- **Audio**: everything is synthesized at runtime (no files). Boss attacks have a rising charge-up
+  sound and a distinct release, panned toward the attack and never quieter than 35 %, so sound
+  is a second telegraph. Perfect-dodge slow-mo muffles the mix; pause mutes effects.
+  Music: title, Phase 1 (D minor, 136 BPM), Phase 2 (bells and choir, 144 BPM), Phase 3
+  (C minor, 168 BPM, driven bass), victory, defeat; crossfades on phase changes.
+- Graphics presets: LOW (no post-processing), MEDIUM (bloom, mobile default), HIGH (bloom + shadows).
+  Auto resolution (default on) steps the render scale between 50 % and 100 % to hold ~50+ fps.
 
 - **Readability rules** (after playtest feedback):
   - World is cool and low-saturation (blue-violet night); boss attacks own the warm red/orange range.

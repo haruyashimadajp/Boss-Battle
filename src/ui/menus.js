@@ -1,4 +1,6 @@
 // Title / pause / settings screens and control-mode switching.
+import { audio } from '../audio/audio.js';
+import { DIFFICULTY } from '../config.js';
 
 const HELP = {
   pc: [
@@ -8,8 +10,10 @@ const HELP = {
     ['SHIFT', 'Air dash'],
     ['Q / RMB', 'Grapple (hold)'],
     ['LMB / J', 'Attack (air: 3rd hit plunges)'],
+    ['F', 'Overdrive (full OD gauge)'],
     ['TAB / MMB', 'Lock-on camera on/off'],
     ['ESC', 'Pause'],
+    ['PAD', 'Gamepad supported'],
   ],
   mobile: [
     ['LEFT', 'Move (virtual stick)'],
@@ -18,6 +22,7 @@ const HELP = {
     ['DASH', 'Air dash'],
     ['HOOK', 'Grapple (hold)'],
     ['ATK', 'Attack (air: 3rd hit plunges)'],
+    ['OD', 'Overdrive (full gauge)'],
     ['LOCK', 'Lock-on camera on/off'],
   ],
 };
@@ -63,6 +68,13 @@ export class Menus {
       }
     }
     this.el.sens.addEventListener('input', () => this.settings.set('sensitivity', parseFloat(this.el.sens.value)));
+    for (const r of document.querySelectorAll('[data-vol]')) {
+      r.addEventListener('input', () => this.settings.set(r.dataset.vol, parseFloat(r.value)));
+    }
+    // Click feedback for every menu button.
+    document.getElementById('ui').addEventListener('click', (e) => {
+      if (e.target.closest('.btn, .seg button')) audio.play('ui');
+    });
 
     settings.onChange(() => this.apply());
     this.apply();
@@ -77,6 +89,12 @@ export class Menus {
     }
     this.el.sens.value = s.get('sensitivity');
     this.el.sensOut.textContent = `${Number(s.get('sensitivity')).toFixed(1)}x`;
+    for (const r of document.querySelectorAll('[data-vol]')) {
+      r.value = s.get(r.dataset.vol);
+      document.querySelector(`[data-out="${r.dataset.vol}"]`).textContent = `${Math.round(s.get(r.dataset.vol) * 100)}%`;
+    }
+    document.getElementById('diff-out').textContent = s.get('difficulty') === 'normal'
+      ? `${DIFFICULTY.normal.maxHp} HP, slower boss` : `${DIFFICULTY.hard.maxHp} HP (intended)`;
 
     const mode = s.controlMode;
     document.body.classList.toggle('mobile', mode === 'mobile');

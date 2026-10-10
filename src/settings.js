@@ -10,6 +10,11 @@ const DEFAULTS = {
   invertY: false,
   showFps: false,
   effects: 'full', // full | reduced (camera shake, flashes, distortion)
+  difficulty: 'hard', // normal | hard
+  autoRes: true, // lower the render resolution when the frame rate drops
+  masterVol: 0.8,
+  musicVol: 0.6,
+  sfxVol: 0.9,
 };
 
 export class Settings {

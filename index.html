@@ -43,6 +43,8 @@
         <div id="dash-pips"></div>
         <div class="status-label">AIR</div>
         <div id="air-pips"></div>
+        <div class="status-label">OD</div>
+        <div id="od-bar"><i></i><span class="pc-only">F</span><span class="mobile-only">OD</span></div>
       </div>
       <div id="fps" hidden></div>
       <div id="combo"><b>0</b><span>HITS</span></div>
@@ -66,6 +68,7 @@
       <button class="tbtn" id="btn-jump" data-action="jump">JUMP</button>
       <button class="tbtn tbtn-big" id="btn-attack" data-action="attack">ATK</button>
       <button class="tbtn tbtn-small on" id="btn-lock" data-action="lock">LOCK</button>
+      <button class="tbtn" id="btn-od" data-action="overdrive">OD</button>
     </div>
 
     <button id="btn-menu" class="icon-btn" aria-label="Menu" hidden>
@@ -76,7 +79,8 @@
     <section id="title-screen" class="overlay">
       <div class="panel title-panel">
         <h1 class="logo">AETHER<br><span>BREAKER</span></h1>
-        <p class="subtitle">PROTOTYPE 04 — FULL FIGHT</p>
+        <p class="subtitle">A THREE-PHASE BOSS BATTLE IN THE SKY</p>
+        <p class="best" id="best" hidden></p>
         <div class="controls-help" id="controls-help"></div>
         <div class="btn-row">
           <button class="btn primary" id="btn-start">START</button>
@@ -117,6 +121,13 @@
       <div class="panel settings-panel">
         <h2>SETTINGS</h2>
         <div class="setting">
+          <label>Difficulty <output id="diff-out"></output></label>
+          <div class="seg" data-key="difficulty">
+            <button data-value="normal">NORMAL</button>
+            <button data-value="hard">HARD</button>
+          </div>
+        </div>
+        <div class="setting">
           <label>Controls</label>
           <div class="seg" data-key="controls">
             <button data-value="auto">AUTO</button>
@@ -133,11 +144,26 @@
           </div>
         </div>
         <div class="setting">
+          <label>Auto resolution</label>
+          <div class="seg" data-key="autoRes">
+            <button data-value="true">ON</button>
+            <button data-value="false">OFF</button>
+          </div>
+        </div>
+        <div class="setting">
           <label>Screen shake &amp; flashes</label>
           <div class="seg" data-key="effects">
             <button data-value="full">FULL</button>
             <button data-value="reduced">REDUCED</button>
           </div>
+        </div>
+        <div class="setting vol">
+          <label>Master <output data-out="masterVol"></output></label>
+          <input type="range" data-vol="masterVol" min="0" max="1" step="0.05">
+          <label>Music <output data-out="musicVol"></output></label>
+          <input type="range" data-vol="musicVol" min="0" max="1" step="0.05">
+          <label>Effects <output data-out="sfxVol"></output></label>
+          <input type="range" data-vol="sfxVol" min="0" max="1" step="0.05">
         </div>
         <div class="setting">
           <label>Camera sensitivity <output id="sens-out"></output></label>

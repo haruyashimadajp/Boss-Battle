@@ -1,9 +1,11 @@
 import * as THREE from 'three';
-import { PLAYER as P, COMBAT } from '../config.js';
+import { PLAYER as P, COMBAT, OVERDRIVE as OD } from '../config.js';
 import { resolve, probeGround, groundHeightBelow } from '../world/collision.js';
 import { buildPlayerModel } from './model.js';
 import { SwordTrail } from '../fx/trail.js';
 import { addOutline } from '../fx/outline.js';
+import { audio } from '../audio/audio.js';
+import { OD_COLOR } from './overdrive.js';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _wish = new THREE.Vector3();
@@ -20,6 +22,7 @@ const _pt = new THREE.Vector3();
 const _bladeBase = new THREE.Vector3();
 const _bladeTip = new THREE.Vector3();
 
+const WEAK_HIT = Symbol('weak'); // marks "this swing already hit a weak point"
 const COLOR = { cyan: 0x46e6ff, violet: 0xb77dff, white: 0xffffff };
 
 export class Player {
@@ -70,6 +73,8 @@ export class Player {
     if (initial) {
       this.hp = P.maxHp;
       this.dead = false;
+      this.od = 0; // Overdrive gauge 0..1
+      this.odT = 0; // Overdrive time left
     }
     this.hurtT = 0;
     this.stunT = 0;
@@ -105,6 +110,7 @@ export class Player {
   get grappling() { return this.grapple.state !== 'idle'; }
   get invulnerable() { return this.iframes > 0; }
   get attacking() { return this.combat.active !== null; }
+  get overdrive() { return this.odT > 0; }
   get center() { return _tmp2.set(this.pos.x, this.pos.y + P.height * 0.55, this.pos.z); }
 
   update(dt, input, rig, camera, controlMode) {
@@ -119,6 +125,7 @@ export class Player {
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.stunT = Math.max(0, this.stunT - dt);
     this.dashAge += dt;
+    this.odT = Math.max(0, this.odT - dt);
     g.cd = Math.max(0, g.cd - dt);
     const cb = this.combat;
     cb.recover = Math.max(0, cb.recover - dt);
@@ -158,7 +165,7 @@ export class Player {
       this.dashAge = 0;
       if (wishLen > 0.1) this.dashDir.copy(_wish).normalize();
       else this.dashDir.set(Math.sin(this.facing), 0, Math.cos(this.facing));
-      this.dashCharges--;
+      if (!this.overdrive) this.dashCharges--; // Overdrive: free dashes
       this.dashT = P.dashDuration;
       this.dashCd = P.dashDuration + P.dashCooldown;
       this.iframes = P.dashIFrames;
@@ -169,6 +176,7 @@ export class Player {
       this.fx.ring(c, { color: COLOR.cyan, from: 0.4, to: 2.4, life: 0.25, normal: this.dashDir });
       this.fx.burst(c, { count: 18, color: COLOR.cyan, speed: 10, dir: _tmp.copy(this.dashDir).negate(), spread: 0.6, life: 0.35, size: 0.3 });
       this.events.shake(0.12);
+      audio.play('dash');
     }
 
     // ---- Grapple fire ----
@@ -185,6 +193,7 @@ export class Player {
       this.airJumps = P.airJumps;
       this.dashCharges = P.dashCharges;
       this.fx.burst(g.anchor.pos, { count: 14, color: COLOR.violet, speed: 6, life: 0.35 });
+      audio.play('hookFire');
     }
     if (g.state !== 'idle' && !input.grappleHeld) this.endGrapple(true);
 
@@ -306,6 +315,7 @@ export class Player {
       this.jumpCut = true;
       this.landSquash = -0.25;
       this.fx.ring(_tmp.copy(this.pos).setY(this.pos.y + 0.05), { color: COLOR.cyan, from: 0.3, to: 1.6, life: 0.3, alpha: 0.6 });
+      audio.play('jump');
     } else if (input.jumpPressed && !this.grounded && this.airJumps > 0) {
       v.y = P.doubleJumpVelocity;
       this.airJumps--;
@@ -320,6 +330,7 @@ export class Player {
       }
       this.fx.ring(this.pos, { color: COLOR.violet, from: 0.4, to: 2.2, life: 0.35 });
       this.fx.burst(this.pos, { count: 16, color: COLOR.violet, speed: 6, dir: _tmp.set(0, -1, 0), spread: 0.9, life: 0.4, size: 0.28 });
+      audio.play('jump2');
     }
 
     // Variable jump height: releasing early cuts the rise.
@@ -378,6 +389,7 @@ export class Player {
     if (def.plunge) {
       this.vel.set(cb.dir.x * 4, -COMBAT.plungeSpeed * 0.3, cb.dir.z * 4);
       this.fx.ring(c, { color: COLOR.cyan, from: 0.5, to: 2.5, life: 0.25 });
+      audio.play('plunge');
     } else if (air) {
       this.vel.y = Math.max(this.vel.y, COMBAT.airHover);
     }
@@ -386,7 +398,7 @@ export class Player {
   updateAttack(dt) {
     const cb = this.combat;
     const def = cb.active;
-    cb.t += dt;
+    cb.t += dt * (this.overdrive && !def.plunge ? OD.attackSpeed : 1);
 
     if (def.plunge) {
       // Accelerate into the dive, hitting everything on the way down.
@@ -426,8 +438,10 @@ export class Player {
       _pt.copy(c).addScaledVector(cb.dir, 0.4);
       this.fx.slash(_pt, cb.dir, {
         roll: def.roll, flip: def.flip, radius: def.reach * 1.2,
-        color: def.heavy ? 0x9ff4ff : COLOR.cyan, sweep: def.hitEnd - def.hitStart + 0.02,
+        color: this.overdrive ? OD_COLOR : def.heavy ? 0x9ff4ff : COLOR.cyan, sweep: def.hitEnd - def.hitStart + 0.02,
       });
+      audio.play(def.heavy ? 'swingHeavy' : 'swing');
+      this.events.onSlash?.(def, c, cb.dir);
     }
     if (cb.t >= def.hitStart && cb.t <= def.hitEnd) {
       this.attackHitCheck(def, _hit.copy(c).addScaledVector(cb.dir, def.reach * 0.55));
@@ -442,9 +456,17 @@ export class Player {
 
   attackHitCheck(def, hitCenter) {
     const cb = this.combat;
-    for (const t of this.targets()) {
-      if (cb.hitSet.has(t.id)) continue;
-      if (t.pos.distanceTo(hitCenter) > def.reach + t.r) continue;
+    // Closest first, and at most one weak point per swing (clustered jewels don't all pop at once).
+    const list = this.targets()
+      .map((t) => ({ t, d: t.pos.distanceTo(hitCenter) - t.r }))
+      .filter((e) => e.d <= def.reach && !cb.hitSet.has(e.t.id))
+      .sort((a, b) => a.d - b.d);
+    for (const { t } of list) {
+      if (cb.hitSet.has(t.id)) continue; // body parts share one id
+      if (t.kind === 'weak') {
+        if (cb.hitSet.has(WEAK_HIT)) continue;
+        cb.hitSet.add(WEAK_HIT);
+      }
       cb.hitSet.add(t.id);
       // Contact point on the target's surface, facing the player.
       _pt.copy(hitCenter).sub(t.pos);
@@ -514,6 +536,7 @@ export class Player {
         g.t = 0;
         this.fx.ring(g.anchor.pos, { color: COLOR.violet, from: 0.5, to: 4, life: 0.35, normal: dir });
         this.events.shake(0.1);
+        audio.play('hookHit', { pos: g.anchor.pos });
       }
       return;
     }
@@ -538,6 +561,7 @@ export class Player {
       this.fx.burst(g.anchor.pos, { count: 26, color: COLOR.violet, speed: 12, life: 0.45, size: 0.35 });
       this.fx.ring(g.anchor.pos, { color: COLOR.white, from: 0.5, to: 3.5, life: 0.3, normal: dir });
       this.events.shake(0.18);
+      audio.play('hookPop');
       this.endGrapple(false);
     }
   }
@@ -573,12 +597,14 @@ export class Player {
       this.fx.ring(_tmp.copy(this.pos).setY(this.pos.y + 0.05), { color: 0xbfd8ff, from: 0.5, to: 2 + hard * 4, life: 0.4, alpha: 0.4 + hard * 0.6 });
       this.fx.burst(_tmp, { count: Math.round(8 + hard * 24), color: 0x9fb6ff, speed: 4 + hard * 8, flat: true, life: 0.45, size: 0.3 });
       if (hard > 0.3) this.events.shake(hard * 0.35);
+      audio.play('land', { vol: 0.4 + hard * 0.6 });
     }
   }
 
   fallOut() {
     this.events.flash('#b77dff', 0.6);
     this.events.shake(0.3);
+    audio.play('fall');
     // Hard mode: the void costs HP.
     this.hp = Math.max(0, this.hp - P.fallDamage);
     this.events.onFall?.();
@@ -651,15 +677,25 @@ export class Player {
       m.root.updateMatrixWorld();
       m.handSword.localToWorld(_bladeBase.set(0, 0.2, 0));
       m.handSword.localToWorld(_bladeTip.set(0, 1.4, 0));
-      this.trail.setColor(cb.active.heavy ? 0x9ff4ff : COLOR.cyan);
+      this.trail.setColor(this.overdrive ? OD_COLOR : cb.active.heavy ? 0x9ff4ff : COLOR.cyan);
     }
     this.trail.update(dt, swinging, _bladeBase, _bladeTip);
 
     // Blink while recovering from a hit.
     m.root.visible = this.hurtT <= 0 || Math.floor(this.hurtT * 18) % 2 === 0;
 
-    // Glow pulses while invulnerable.
-    m.glow.emissiveIntensity = this.iframes > 0 ? 4 : this.grappling ? 2.8 : 1.8;
+    // Glow pulses while invulnerable; Overdrive turns it violet-white with an aura.
+    m.glow.emissive.setHex(this.overdrive ? OD_COLOR : COLOR.cyan);
+    m.glow.emissiveIntensity = this.iframes > 0 ? 4 : this.overdrive ? 3.2 : this.grappling ? 2.8 : 1.8;
+    if (this.overdrive && dt > 0) {
+      this.auraT = (this.auraT ?? 0) - dt;
+      if (this.auraT <= 0) {
+        this.auraT = 0.05;
+        _tmp.set(this.pos.x + (Math.random() - 0.5) * 0.9, this.pos.y + Math.random() * 1.7, this.pos.z + (Math.random() - 0.5) * 0.9);
+        this.fx.burst(_tmp, { count: 1, color: OD_COLOR, speed: 1.5, dir: _side.set(0, 1, 0), spread: 0.3, life: 0.5, size: 0.35, gravity: -6 });
+        if (Math.hypot(this.vel.x, this.vel.z) > 6 && !this.dashing) this.fx.afterimage({ color: OD_COLOR, life: 0.2, alpha: 0.3 });
+      }
+    }
 
     // Drop shadow marker: always shows where you will land.
     const gy = groundHeightBelow(this.pos.x, this.pos.y, this.pos.z, this.world.colliders);

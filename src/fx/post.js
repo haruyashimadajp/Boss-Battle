@@ -131,6 +131,7 @@ const GRADES = {
   break: { gain: [1.04, 1.02, 1.0], lift: [0.0, 0.0, 0.01], sat: 0.8 },
   clear: { gain: [1.06, 1.0, 0.9], lift: [0.0, 0.0, 0.0], sat: 1.1 },
   dead: { gain: [1.0, 0.75, 0.78], lift: [0.03, 0.0, 0.0], sat: 0.35 },
+  overdrive: { gain: [1.03, 0.98, 1.07], lift: [0.012, 0.0, 0.025], sat: 1.12 },
 };
 
 const _p = new THREE.Vector3();
@@ -162,14 +163,50 @@ export class Post {
     this.grade = GRADES.title;
     this.intensity = 1; // "reduced effects" setting scales distortion and aberration
     this.quality = 'high';
+    this.autoRes = true;
+    this.resScale = 1;
+    this.perf = { frames: 0, time: 0, good: 0 };
+  }
+
+  get baseRatio() { return Math.min(window.devicePixelRatio, { high: 2, medium: 1.5, low: 1 }[this.quality] ?? 1); }
+
+  // Dynamic resolution: drop the render scale when the frame rate sags, raise it again when it recovers.
+  adapt(rawDt) {
+    const p = this.perf;
+    if (!this.autoRes) {
+      if (this.resScale !== 1) this.setResScale(1);
+      return;
+    }
+    p.frames++;
+    p.time += rawDt;
+    if (p.time < 1) return;
+    const fps = p.frames / p.time;
+    p.frames = 0;
+    p.time = 0;
+    if (fps < 48 && this.resScale > 0.55) {
+      this.setResScale(this.resScale - 0.1);
+      p.good = 0;
+    } else if (fps > 57) {
+      if (++p.good >= 3 && this.resScale < 1) {
+        this.setResScale(this.resScale + 0.1);
+        p.good = 0;
+      }
+    } else {
+      p.good = 0;
+    }
+  }
+
+  setResScale(s) {
+    this.resScale = Math.min(1, Math.max(0.5, Math.round(s * 10) / 10));
+    this.renderer.setPixelRatio(this.baseRatio * this.resScale);
+    this.resize();
   }
 
   setQuality(q) {
     this.quality = q;
     const r = this.renderer;
     const high = q === 'high';
-    const maxRatio = { high: 2, medium: 1.5, low: 1 }[q] ?? 1;
-    r.setPixelRatio(Math.min(window.devicePixelRatio, maxRatio));
+    r.setPixelRatio(this.baseRatio * this.resScale);
     r.shadowMap.enabled = high;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     this.world.lights.moon.castShadow = high;

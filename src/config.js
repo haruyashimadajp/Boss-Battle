@@ -70,7 +70,7 @@ export const COMBAT = {
 };
 
 export const BOSS = {
-  maxHp: 10000,
+  maxHp: 16000, // scripted bot: ~40 s with nonstop sword uptime, ~2.2 min at 30 % uptime
   phase1End: 0.6, // fraction of HP where Phase 1 ends
   phase2End: 0.25, // fraction of HP where Phase 2 ends (Phase 3 runs to 0)
   angelWeakHp: 320, // wing jewels in Phase 2
@@ -79,10 +79,10 @@ export const BOSS = {
   coreRadius: 6,
   brokenY: 10,
   breakDuration: 6,
-  brokenMult: 2.5,
+  brokenMult: 2.0,
   weakMult: 1.5,
   weakHp: 350,
-  weakDestroyBonus: 400,
+  weakDestroyBonus: 200,
   breakPerWeakHit: 0.07,
   breakPerCoreHit: 0.015,
   breakPerWeakDestroy: 0.3,
@@ -105,4 +105,20 @@ export const CAMERA = {
   fovBoost: 16,
   mouseSens: 0.0022,
   touchSens: 0.0055,
+};
+
+// Overdrive (ultimate). The gauge fills from hits, reflects, perfect dodges and breaks.
+export const OVERDRIVE = {
+  duration: 8,
+  dmgMult: 1.4,
+  attackSpeed: 1.3, // swings play this much faster
+  gain: { hit: 0.02, weak: 0.035, reflect: 0.05, perfect: 0.25, break: 0.15, destroy: 0.1 },
+  wave: { speed: 46, range: 42, radius: 1.9, dmgMult: 0.35, minDmg: 25 },
+  clearRadius: 12, // activation blast destroys boss projectiles this close
+};
+
+// Difficulty presets (Settings → Difficulty). HARD is the intended experience.
+export const DIFFICULTY = {
+  normal: { maxHp: 9, idleMult: 1.35, iframes: 0.26, phaseHeal: 4, label: 'NORMAL' },
+  hard: { maxHp: 6, idleMult: 1, iframes: 0.2, phaseHeal: 3, label: 'HARD' },
 };

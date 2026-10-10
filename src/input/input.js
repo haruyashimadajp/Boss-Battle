@@ -4,7 +4,12 @@ const capture = (el, e) => {
   try { el.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
 };
 
-// Unified input state fed by keyboard/mouse and touch controls.
+const DEAD = 0.18;
+const deadzone = (v) => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
+
+// Unified input state fed by keyboard/mouse, touch controls and gamepads.
+// Gamepad (standard mapping): left stick move, right stick look, A jump, B / RB dash,
+// X / RT attack, LB / LT grapple, Y Overdrive, R3 lock-on, Start pause, A confirms in menus.
 // Gameplay code only reads the fields below; it never touches DOM events.
 export class Input {
   constructor(canvas, settings) {
@@ -21,6 +26,7 @@ export class Input {
     this.grapplePressed = false;
     this.attackPressed = false;
     this.lockPressed = false;
+    this.overdrivePressed = false;
 
     this.enabled = false;
     this.pointerLocked = false;
@@ -29,6 +35,9 @@ export class Input {
     this.mouseGrapple = false;
     this.dragLook = false; // mouse-drag fallback when pointer lock is unavailable
     this.onPauseRequest = null;
+    this.onGamepadStart = null; // Start button
+    this.onGamepadConfirm = null; // A button while in a menu
+    this.pad = { prev: [], move: { x: 0, y: 0 }, jump: false, grapple: false, lastT: performance.now() };
 
     this.keys = new Set();
     this.stick = { id: null, x: 0, y: 0, ox: 0, oy: 0 };
@@ -80,6 +89,7 @@ export class Input {
       if (e.code === 'KeyQ' || e.code === 'KeyE') this.grapplePressed = true;
       if (e.code === 'KeyJ') this.attackPressed = true;
       if (e.code === 'Tab' || e.code === 'KeyR') this.lockPressed = true;
+      if (e.code === 'KeyF') this.overdrivePressed = true;
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
   }
@@ -207,6 +217,7 @@ export class Input {
         if (action === 'dash') this.dashPressed = true;
         if (action === 'attack') this.attackPressed = true;
         if (action === 'lock') this.lockPressed = true;
+        if (action === 'overdrive') this.overdrivePressed = true;
         if (action === 'grapple') { this.grapplePressed = true; this.touchButtons.grapple = true; }
       });
       const up = () => {
@@ -220,11 +231,49 @@ export class Input {
     }
   }
 
+  pollGamepad() {
+    const pad = this.pad;
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - pad.lastT) / 1000);
+    pad.lastT = now;
+    pad.move.x = pad.move.y = 0;
+    pad.jump = pad.grapple = false;
+    let gp = null;
+    try {
+      for (const p of navigator.getGamepads?.() || []) if (p && p.connected) { gp = p; break; }
+    } catch { /* not allowed in this frame */ }
+    if (!gp) return;
+    const down = gp.buttons.map((b) => b.pressed || b.value > 0.5);
+    const hit = (i) => down[i] && !pad.prev[i];
+    pad.prev = down;
+    if (hit(9)) this.onGamepadStart?.();
+    if (!this.enabled) {
+      if (hit(0)) this.onGamepadConfirm?.();
+      return;
+    }
+    pad.move.x = deadzone(gp.axes[0] || 0);
+    pad.move.y = -deadzone(gp.axes[1] || 0);
+    const rx = deadzone(gp.axes[2] || 0);
+    const ry = deadzone(gp.axes[3] || 0);
+    // Response curve: fine control near the centre, fast turns at full tilt.
+    this.lookX += rx * Math.abs(rx) * 3.2 * this.sens * dt;
+    this.lookY += ry * Math.abs(ry) * 2.2 * this.sens * dt * this.ySign;
+    pad.jump = down[0];
+    pad.grapple = down[4] || down[6];
+    if (hit(0)) this.jumpPressed = true;
+    if (hit(1) || hit(5)) this.dashPressed = true;
+    if (hit(2) || hit(7)) this.attackPressed = true;
+    if (hit(4) || hit(6)) this.grapplePressed = true;
+    if (hit(3)) this.overdrivePressed = true;
+    if (hit(11) || hit(10)) this.lockPressed = true;
+  }
+
   // Called once per frame before gameplay reads the state.
   update() {
+    this.pollGamepad();
     const k = this.keys;
-    let x = 0;
-    let y = 0;
+    let x = this.pad.move.x;
+    let y = this.pad.move.y;
     if (k.has('KeyD') || k.has('ArrowRight')) x += 1;
     if (k.has('KeyA') || k.has('ArrowLeft')) x -= 1;
     if (k.has('KeyW') || k.has('ArrowUp')) y += 1;
@@ -236,8 +285,8 @@ export class Input {
     this.move.x = x;
     this.move.y = y;
 
-    this.jumpHeld = k.has('Space') || this.touchButtons.jump;
-    this.grappleHeld = k.has('KeyQ') || k.has('KeyE') || this.mouseGrapple || this.touchButtons.grapple;
+    this.jumpHeld = k.has('Space') || this.touchButtons.jump || this.pad.jump;
+    this.grappleHeld = k.has('KeyQ') || k.has('KeyE') || this.mouseGrapple || this.touchButtons.grapple || this.pad.grapple;
   }
 
   // Called at the end of each frame: clears one-shot events.
@@ -249,5 +298,6 @@ export class Input {
     this.grapplePressed = false;
     this.attackPressed = false;
     this.lockPressed = false;
+    this.overdrivePressed = false;
   }
 }

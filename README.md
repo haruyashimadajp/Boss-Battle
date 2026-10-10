@@ -3,10 +3,10 @@
 A browser 3D boss-battle action game (Three.js, no build step).
 Design document: [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md)
 
-**Current state: Prototype 04 — the full three-phase fight.** Phase 1: the machine-seraph.
-Phases 2–3: Seraphina, the angel who hatches from its core. Ends with a finisher cinematic. Floating sky arena, full movement kit,
-sword combat, and Phase 1 of the Seraph fight (laser sweeps, homing orbs, wing slams).
-PC and mobile controls.
+**Current state: v1.0 — all five milestones done.** A three-phase boss fight in a floating sky
+arena: the machine-seraph, then Seraphina, the angel who hatches from its core, ending with a
+finisher cinematic. Full movement kit, sword combat, Overdrive ultimate, synthesized sound effects
+and music, NORMAL / HARD difficulty. PC (keyboard + mouse or gamepad) and mobile controls.
 
 ## Run locally
 
@@ -38,20 +38,30 @@ PC:
     Shift         air dash (2 charges, brief invincibility)
     Q / E / RMB   grapple (hold to reel in, release to slingshot)
     LMB / J       attack (3-hit combo; in the air the 3rd hit is a plunge)
+    F             Overdrive (when the OD gauge is full)
     Tab / R / MMB lock-on camera on/off
     Esc           pause
 
+Gamepad (standard layout): left stick move, right stick camera, A jump, B / RB dash,
+X / RT attack, LB / LT grapple, Y Overdrive, R3 lock-on, Start pause. A confirms on menus.
+
 Mobile: left side virtual stick, drag on the right side to look, ATK / JUMP / DASH / HOOK
-buttons, LOCK toggle at the top right.
+buttons, OD (lights up when the gauge is full), LOCK toggle at the top right.
 
 Tips:
 - Dash *through* an attack for a PERFECT DODGE: the boss slows down for 1.5 s.
 - Slash the homing orbs to send them back into the core.
 - The pink orbs on the wings are weak points (and grapple targets). Destroying them fills the
-  break gauge fast. A full gauge makes the boss crash down: 2.5x damage for 6 s.
+  break gauge fast. A full gauge makes the boss crash down: 2x damage for 6 s.
+- Each swing damages at most one weak point, so aim for them one at a time.
+- **Overdrive**: hits, reflects, perfect dodges and breaks fill the OD gauge. Press F (Y / OD) for
+  8 s of faster, stronger swings that launch sword waves at the boss, free dashes, and a
+  blast that wipes out nearby orbs and bullets. A perfect dodge fills a quarter of the gauge.
 - Jump during a dash to keep its momentum (dash-jump). Grappling refills your dash charges
   and double jump. The dark circle under you shows where you'll land.
-- You have 6 HP. Falling into the void costs 1.
+- You have 6 HP on HARD (9 on NORMAL, which also slows the boss down). Falling into the void costs 1.
+- Settings has volume sliders (master / music / effects) and Auto resolution, which lowers the
+  render resolution when the frame rate drops.
 - Settings → "Screen shake & flashes: REDUCED" tones down shake, flashes and distortion.
 - Phase 2: break the 4 jewels on her wings. Phase 3: hit the heart jewel on her chest.
 - Annihilation beam ("TAKE COVER"): get a pillar or platform between you and her, or perfect-dodge.
@@ -62,10 +72,11 @@ Tips:
     index.html, style.css
     src/main.js            bootstrap, game states, main loop
     src/config.js          gameplay tuning values
-    src/settings.js        persisted settings (controls, quality, sensitivity…)
-    src/input/input.js     keyboard/mouse + touch → unified input state
+    src/settings.js        persisted settings (controls, quality, difficulty, volume…)
+    src/input/input.js     keyboard/mouse + touch + gamepad → unified input state
+    src/audio/             Web Audio synthesized effects (audio.js) and procedural music (music.js)
     src/camera.js          third-person camera (lock-on, collision, FOV kick, shake)
-    src/player/            character controller, sword combat and model
+    src/player/            character controller, sword combat, Overdrive waves and model
     src/boss/              boss state machine (3 phases), angel model, attacks (hazards*.js)
     src/world/             arena builder and collision
     src/fx/                particles/rings/afterimages, post-processing

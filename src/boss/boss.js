@@ -79,6 +79,7 @@ export class Boss {
     this.events = events;
     this.hazards = [];
     this.ctx = null; // hazard context, set by the game
+    this.idleMult = 1; // difficulty: longer pauses between attacks on NORMAL
     this.angelPos = new THREE.Vector3(0, 18, 0);
     this.home = new THREE.Vector3(0, 18, 0);
     this.build();
@@ -380,6 +381,11 @@ export class Boss {
     this.ctx?.shockwave?.(c, { strength: 2.2, speed: 0.6, life: 1.2 });
   }
 
+  // Overdrive activation: destroy nearby projectiles.
+  clearProjectiles(pos, r) {
+    for (const h of this.hazards) h.clearNear?.(pos, r);
+  }
+
   cancelHazards() {
     for (const h of this.hazards) h.cancel();
     this.hazards.length = 0;
@@ -489,7 +495,7 @@ export class Boss {
           this.state = 'idle';
           const [lo, hi] = this.phase === 1 ? [BOSS.idleMin, BOSS.idleMax]
             : this.phase === 2 ? [0.8, 1.4] : this.hp / BOSS.maxHp < 0.1 ? [0.35, 0.7] : [0.6, 1.1];
-          this.idleT = lo + Math.random() * (hi - lo);
+          this.idleT = (lo + Math.random() * (hi - lo)) * this.idleMult;
         }
         break;
       case 'broken':

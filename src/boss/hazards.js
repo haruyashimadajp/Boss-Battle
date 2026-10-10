@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { audio } from '../audio/audio.js';
 import { BOSS } from '../config.js';
 import { groundHeightBelow } from '../world/collision.js';
 import { addOutline } from '../fx/outline.js';
@@ -109,7 +110,15 @@ export class Hazard {
     this.ctx = ctx;
     this.t = 0;
     this.meshes = [];
+    this.sounds = [];
     this.hitCool = 0;
+  }
+
+  // Sound tied to this attack: sustained ones stop when the attack ends or is cancelled.
+  sound(name, opts) {
+    const h = audio.play(name, opts);
+    this.sounds.push(h);
+    return h;
   }
 
   add(mesh) {
@@ -133,6 +142,8 @@ export class Hazard {
   }
 
   cancel() {
+    for (const h of this.sounds) h.stop();
+    this.sounds.length = 0;
     for (const m of this.meshes) {
       this.ctx.scene.remove(m);
       m.traverse((o) => o.material?.dispose?.());
@@ -178,6 +189,7 @@ export class LaserSweep extends Hazard {
     this.beam.add(this.beamCore, this.beamGlow, this.beamOuter);
     for (const m of this.beam.children) m.frustumCulled = false;
     this.beam.visible = false;
+    this.chargeSnd = this.sound('laserCharge', { pos: this.origin, dur: this.telegraph });
   }
 
   aim() {
@@ -257,6 +269,8 @@ export class LaserSweep extends Hazard {
       if (!this.beam.visible) {
         this.beam.visible = true;
         this.aimLine.visible = false;
+        this.chargeSnd.stop(0.05);
+        this.sound('laserFire', { pos: this.origin });
         this.ctx.shake(0.25);
         this.ctx.shockwave?.(this.charge.position, { strength: 0.7, speed: 0.8, life: 0.5 });
         fx.ring(this.charge.position, { color: 0xffd0a0, from: 1, to: 8, life: 0.35, normal: this.dir });
@@ -328,6 +342,7 @@ export class OrbVolley extends Hazard {
     this.base = Math.random() * Math.PI * 2;
     ctx.boss.getCorePos(_a);
     ctx.fx.converge(_a, { count: 50, radius: 14, color: 0xff4a7a, life: 0.45, size: 0.6 });
+    this.sound('orbCharge', { pos: _a });
   }
 
   spawnOrb() {
@@ -360,6 +375,7 @@ export class OrbVolley extends Hazard {
     o.alive = false;
     o.state = 'dead';
     o.mesh.visible = false;
+    audio.play('orbPop', { pos: o.pos, vol: big ? 1 : 0.6 });
     this.ctx.fx.burst(o.pos, { count: big ? 30 : 16, color, speed: big ? 16 : 9, life: 0.45, size: 0.4 });
     this.ctx.fx.ring(o.pos, { color, from: 0.3, to: big ? 4 : 2.4, life: 0.3, normal: this.ctx.camNormal });
   }
@@ -372,6 +388,11 @@ export class OrbVolley extends Hazard {
     o.glow.material.color.set(0x46e6ff);
     o.t = 0;
     this.ctx.fx.ring(o.pos, { color: 0x46e6ff, from: 0.3, to: 3, life: 0.3, normal: this.ctx.camNormal });
+  }
+
+  // Overdrive activation blast.
+  clearNear(pos, r) {
+    for (const o of this.orbs) if (o.alive && o.state !== 'reflected' && o.pos.distanceTo(pos) < r) this.explode(o, 0xc89bff);
   }
 
   threats(out) {
@@ -406,6 +427,7 @@ export class OrbVolley extends Hazard {
         if (o.t >= o.hoverFor) {
           o.state = 'homing';
           o.t = 0;
+          if (!this.launched) { this.launched = true; audio.play('orbLaunch', { pos: o.pos }); }
           _a.copy(player.pos).y += 1;
           o.vel.subVectors(_a, o.pos).setLength(15);
         }
@@ -498,6 +520,7 @@ export class WingSlam extends Hazard {
     this.wave.visible = false;
     this.waveHit = false;
     this.place();
+    this.chargeSnd = this.sound('slamCharge', { pos: this.center, dur: this.telegraph });
   }
 
   threats(out) {
@@ -542,6 +565,7 @@ export class WingSlam extends Hazard {
 
     const dt2 = t - this.telegraph;
     if (dt2 < this.drop) {
+      if (!this.falling) { this.falling = true; this.chargeSnd.stop(0.05); audio.play('slamFall', { pos: c }); }
       this.blade.position.y = c.y + 23 - (dt2 / this.drop) * 23;
       return true;
     }
@@ -559,6 +583,8 @@ export class WingSlam extends Hazard {
       _p.copy(c).setY(c.y + 0.05);
       fx.scorch(_p, { size: this.radius * 0.9, life: 3.5 });
       this.ctx.shockwave?.(_a, { strength: 1.3, speed: 0.9, life: 0.7 });
+      audio.play('slamImpact', { pos: c });
+      audio.duckMusic(0.6, 0.6);
       const d = player.pos.distanceTo(c);
       this.ctx.shake(Math.max(0.15, 0.7 - d / 60));
       this.ctx.impactFlash?.(d);
